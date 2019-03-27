@@ -1,0 +1,20 @@
+<?xml version='1.0' encoding='utf-8'?>
+<plugin id="cordova-plugin-x-zijinutil"
+	version="1.0.0"
+	xmlns="http://apache.org/cordova/ns/plugins/1.0"
+	xmlns:android="http://schemas.android.com/apk/res/android">
+	<name>ZijinUtil</name>
+	<js-module src="www/ZijinUtil.js" name="ZijinUtil">
+		<clobbers target="window.plugins.zijinutil" />
+	</js-module>
+	<platform name="android">
+		<source-file src="src/android/nl/xservices/plugins/ZijinUtil.java" target-dir="src/nl/xservices/plugins" />
+		<source-file src="src/android/gson-2.8.5.jar" target-dir="libs" />
+		<config-file parent="/*" target="res/xml/config.xml">
+			<feature name="ZijinUtil"><param name="android-package" value="nl.xservices.plugins.ZijinUtil" /></feature>
+		</config-file>
+		<config-file parent="/*" target="AndroidManifest.xml"></config-file>
+		<framework src="src/android/build.gradle" custom="true" type="gradleReference" />
+		<resource-file src="src/android/cwsdk-release.aar" target="aar/cwsdk-release.aar"/>
+	</platform>
+</plugin>
