@@ -6,6 +6,7 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.os.Build;
 import android.provider.Settings;
+import android.util.Log;
 
 import org.apache.cordova.CordovaInterface;
 import org.apache.cordova.CordovaPlugin;
@@ -37,6 +38,7 @@ public class ZijinUtil extends CordovaPlugin {
     @Override
     public void initialize(CordovaInterface cordova, CordovaWebView webView) {
         super.initialize(cordova, webView);
+        cw.BarCodeAPI(cordova.getContext()).openBarCodeReceiver();
         receiver = new BarCodeReceiver();
         IntentFilter filter = new IntentFilter();
         filter.addAction(Intent.ACTION_SCREEN_ON);
@@ -68,29 +70,15 @@ public class ZijinUtil extends CordovaPlugin {
         }
         else if(action.equals("closeUHF")) {
 //            cordova.getActivity().runOnUiThread(new Runnable() {
-            cordova.getThreadPool().execute(() -> {
-                cw.R2000UHFAPI().close();
-            });
+            cordova.getThreadPool().execute(() -> cw.R2000UHFAPI().close());
             return true;
         }
         else if(action.equals("scan")) {
-            cordova.getThreadPool().execute(() -> {
-                try {
-                    barCodeScanner(callbackContext);
-                } catch(Exception e) {
-                    callbackContext.error(e.getMessage());
-                }
-            });
+            cordova.getThreadPool().execute(() -> barCodeScanner(callbackContext));
             return true;
         }
         else if(action.equals("continueScanning")) {
-            cordova.getThreadPool().execute(() -> {
-                try {
-                    continueScanning(callbackContext);
-                } catch(Exception e) {
-                    callbackContext.error(e.getMessage());
-                }
-            });
+            cordova.getThreadPool().execute(() -> continueScanning(callbackContext));
             return true;
         }
         else if(action.equals("closeScanning")) {
@@ -236,7 +224,11 @@ public class ZijinUtil extends CordovaPlugin {
 
             @Override
             public void onBarCodeData(String s) {
-                callbackId.success(s);
+                if("No decoded message available.".equals(s)) {
+                    callbackId.error(s);
+                } else {
+                    callbackId.success(s);
+                }
             }
 
             @Override
@@ -261,7 +253,16 @@ public class ZijinUtil extends CordovaPlugin {
 
             @Override
             public void onBarCodeData(String s) {
-                callbackId.success(s);
+                Log.i("onBarCodeData", s);
+                PluginResult.Status status;
+                if("No decoded message available.".equals(s)) {
+                    status = PluginResult.Status.ERROR;
+                } else {
+                    status = PluginResult.Status.OK;
+                }
+                PluginResult pr = new PluginResult(status, s);
+                pr.setKeepCallback(true);
+                callbackId.sendPluginResult(pr);
             }
 
             @Override
@@ -449,7 +450,9 @@ public class ZijinUtil extends CordovaPlugin {
     @Override
     public void onPause(boolean multitasking) {
         super.onPause(multitasking);
-        cw.R2000UHFAPI().stopInventoryReal();
+        if(!!cw.R2000UHFAPI().getReaderHelper().getInventoryFlag()) {
+            cw.R2000UHFAPI().stopInventoryReal();
+        }
         cw.BarCodeAPI(cordova.getContext()).CloseScanning();
         //建议在onPause里或者监听屏幕息屏里放，息屏后可以省电
         cw.BarCodeAPI(cordova.getContext()).closeBarCodeReceiver();
@@ -458,6 +461,7 @@ public class ZijinUtil extends CordovaPlugin {
     @Override
     public void onDestroy() {
         super.onDestroy();
+        cw.R2000UHFAPI().close();
         cordova.getActivity().unregisterReceiver(receiver);
     }
 
