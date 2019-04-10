@@ -1,5 +1,6 @@
 package nl.xservices.plugins;
 
+import android.annotation.SuppressLint;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
@@ -59,6 +60,9 @@ public class ZijinUtil extends CordovaPlugin {
         else if(action.equals("startInventoryReal")) {
 //            cordova.getActivity().runOnUiThread(new Runnable() {
             cordova.getThreadPool().execute(() -> startInventoryReal(callbackContext));
+            PluginResult pr = new PluginResult(PluginResult.Status.NO_RESULT);
+            pr.setKeepCallback(true);
+            callbackContext.sendPluginResult(pr);
             return true;
         }
         else if(action.equals("stopInventoryReal")) {
@@ -79,10 +83,13 @@ public class ZijinUtil extends CordovaPlugin {
         }
         else if(action.equals("continueScanning")) {
             cordova.getThreadPool().execute(() -> continueScanning(callbackContext));
+            PluginResult pr = new PluginResult(PluginResult.Status.NO_RESULT);
+            pr.setKeepCallback(true);
+            callbackContext.sendPluginResult(pr);
             return true;
         }
         else if(action.equals("closeScanning")) {
-            cw.BarCodeAPI(cordova.getContext()).CloseScanning();
+            cordova.getThreadPool().execute(() -> cw.BarCodeAPI(cordova.getContext()).CloseScanning());
             return true;
         }
         else if(action.equals("setScanner")) {
@@ -255,8 +262,9 @@ public class ZijinUtil extends CordovaPlugin {
             public void onBarCodeData(String s) {
                 Log.i("onBarCodeData", s);
                 PluginResult.Status status;
-                if("No decoded message available.".equals(s)) {
-                    status = PluginResult.Status.ERROR;
+                if(s.isEmpty() || s.contains("No decoded message available.")) {
+//                    status = PluginResult.Status.ERROR;
+                    return;
                 } else {
                     status = PluginResult.Status.OK;
                 }
@@ -450,7 +458,7 @@ public class ZijinUtil extends CordovaPlugin {
     @Override
     public void onPause(boolean multitasking) {
         super.onPause(multitasking);
-        if(!!cw.R2000UHFAPI().getReaderHelper().getInventoryFlag()) {
+        if(cw.R2000UHFAPI().getReaderHelper() != null && !!cw.R2000UHFAPI().getReaderHelper().getInventoryFlag()) {
             cw.R2000UHFAPI().stopInventoryReal();
         }
         cw.BarCodeAPI(cordova.getContext()).CloseScanning();
