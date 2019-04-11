@@ -234,7 +234,7 @@ public class ZijinUtil extends CordovaPlugin {
                 if("No decoded message available.".equals(s)) {
                     callbackId.error(s);
                 } else {
-                    callbackId.success(s);
+                    callbackId.success(s.replaceAll("\r|\n", ""));
                 }
             }
 
@@ -268,7 +268,7 @@ public class ZijinUtil extends CordovaPlugin {
                 } else {
                     status = PluginResult.Status.OK;
                 }
-                PluginResult pr = new PluginResult(status, s);
+                PluginResult pr = new PluginResult(status, s.replaceAll("\r|\n", ""));
                 pr.setKeepCallback(true);
                 callbackId.sendPluginResult(pr);
             }
