@@ -39,6 +39,7 @@ public class ZijinUtil extends CordovaPlugin {
     @Override
     public void initialize(CordovaInterface cordova, CordovaWebView webView) {
         super.initialize(cordova, webView);
+//        cw.BarCodeAPI(cordova.getContext()).setSettings(1);
         cw.BarCodeAPI(cordova.getContext()).openBarCodeReceiver();
         receiver = new BarCodeReceiver();
         IntentFilter filter = new IntentFilter();
@@ -68,7 +69,9 @@ public class ZijinUtil extends CordovaPlugin {
         else if(action.equals("stopInventoryReal")) {
 //            cordova.getActivity().runOnUiThread(new Runnable() {
             cordova.getThreadPool().execute(() -> {
-                cw.R2000UHFAPI().stopInventoryReal();
+                if(cw.R2000UHFAPI().getReaderHelper() != null && !!cw.R2000UHFAPI().getReaderHelper().getInventoryFlag()) {
+                    cw.R2000UHFAPI().stopInventoryReal();
+                }
             });
             return true;
         }
