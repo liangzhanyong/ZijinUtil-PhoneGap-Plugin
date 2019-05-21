@@ -271,7 +271,11 @@ public class ZijinUtil extends CordovaPlugin {
                 } else {
                     status = PluginResult.Status.OK;
                 }
-                PluginResult pr = new PluginResult(status, s.replaceAll("\r|\n", ""));
+                String result = s.replaceAll("\r|\n", "");
+                if (result.length() == 4 && (result.startsWith("C") || result.startsWith("S"))) {
+                    result = "00000" + result.substring(1);
+                }
+                PluginResult pr = new PluginResult(status, result);
                 pr.setKeepCallback(true);
                 callbackId.sendPluginResult(pr);
             }
