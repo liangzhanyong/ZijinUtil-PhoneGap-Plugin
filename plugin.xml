@@ -9,12 +9,46 @@
 	</js-module>
 	<platform name="android">
 		<source-file src="src/android/nl/xservices/plugins/ZijinUtil.java" target-dir="src/nl/xservices/plugins" />
-		<source-file src="src/android/gson-2.8.5.jar" target-dir="libs" />
+		<source-file src="src/android/libs/gson-2.8.5.jar" target-dir="libs" />
+		<source-file src="src/android/libs/cw-deviceapi.jar" target-dir="libs" />
+		<source-file src="src/android/libs/arm64-v8a/libbarcodereader44.so" target-dir="libs/arm64-v8a"/>
+		<source-file src="src/android/libs/arm64-v8a/libDeviceAPI.so" target-dir="libs/arm64-v8a"/>
+		<source-file src="src/android/libs/arm64-v8a/libHHPScanInterface.so" target-dir="libs/arm64-v8a"/>
+		<source-file src="src/android/libs/arm64-v8a/libHSMDecoderAPI.so" target-dir="libs/arm64-v8a"/>
+		<source-file src="src/android/libs/arm64-v8a/libHsmKil.so" target-dir="libs/arm64-v8a"/>
+		<source-file src="src/android/libs/arm64-v8a/libIAL.so" target-dir="libs/arm64-v8a"/>
+		<source-file src="src/android/libs/arm64-v8a/libIGLBarDecoder.so" target-dir="libs/arm64-v8a"/>
+		<source-file src="src/android/libs/arm64-v8a/libIGLImageAE.so" target-dir="libs/arm64-v8a"/>
+		<source-file src="src/android/libs/arm64-v8a/libSDL.so" target-dir="libs/arm64-v8a"/>
+		<source-file src="src/android/libs/armeabi/libbarcodereader.so" target-dir="libs/armeabi"/>
+		<source-file src="src/android/libs/armeabi/libbarcodereader43.so" target-dir="libs/armeabi"/>
+		<source-file src="src/android/libs/armeabi/libbarcodereader44.so" target-dir="libs/armeabi"/>
+		<source-file src="src/android/libs/armeabi/libDeviceAPI.so" target-dir="libs/armeabi"/>
+		<source-file src="src/android/libs/armeabi/libHHPScanInterface.so" target-dir="libs/armeabi"/>
+		<source-file src="src/android/libs/armeabi/libHSMDecoderAPI.so" target-dir="libs/armeabi"/>
+		<source-file src="src/android/libs/armeabi/libHsmKil.so" target-dir="libs/armeabi"/>
+		<source-file src="src/android/libs/armeabi/libIAL.so" target-dir="libs/armeabi"/>
+		<source-file src="src/android/libs/armeabi/libIGLBarDecoder.so" target-dir="libs/armeabi"/>
+		<source-file src="src/android/libs/armeabi/libIGLImageAE.so" target-dir="libs/armeabi"/>
+		<source-file src="src/android/libs/armeabi/libSDL.so" target-dir="libs/armeabi"/>
+		<source-file src="src/android/libs/armeabi-v7a/libbarcodereader.so" target-dir="libs/armeabi-v7a"/>
+		<source-file src="src/android/libs/armeabi-v7a/libbarcodereader43.so" target-dir="libs/armeabi-v7a"/>
+		<source-file src="src/android/libs/armeabi-v7a/libbarcodereader44.so" target-dir="libs/armeabi-v7a"/>
+		<source-file src="src/android/libs/armeabi-v7a/libDeviceAPI.so" target-dir="libs/armeabi-v7a"/>
+		<source-file src="src/android/libs/armeabi-v7a/libHHPScanInterface.so" target-dir="libs/armeabi-v7a"/>
+		<source-file src="src/android/libs/armeabi-v7a/libHSMDecoderAPI.so" target-dir="libs/armeabi-v7a"/>
+		<source-file src="src/android/libs/armeabi-v7a/libHsmKil.so" target-dir="libs/armeabi-v7a"/>
+		<source-file src="src/android/libs/armeabi-v7a/libIAL.so" target-dir="libs/armeabi-v7a"/>
+		<source-file src="src/android/libs/armeabi-v7a/libIGLBarDecoder.so" target-dir="libs/armeabi-v7a"/>
+		<source-file src="src/android/libs/armeabi-v7a/libIGLImageAE.so" target-dir="libs/armeabi-v7a"/>
+		<source-file src="src/android/libs/armeabi-v7a/libSDL.so" target-dir="libs/armeabi-v7a"/>
+		<source-file src="src/android/nl/xservices/plugins/Plugin_P80.java" target-dir="src/main/java/nl/xservices/plugins" />
+        <source-file src="src/android/nl/xservices/plugins/Plugin_U8.java" target-dir="src/main/java/nl/xservices/plugins" />
 		<config-file parent="/*" target="res/xml/config.xml">
 			<feature name="ZijinUtil"><param name="android-package" value="nl.xservices.plugins.ZijinUtil" /></feature>
 		</config-file>
 		<config-file parent="/*" target="AndroidManifest.xml"></config-file>
 		<framework src="src/android/build.gradle" custom="true" type="gradleReference" />
-		<resource-file src="src/android/cwsdk-release.aar" target="aar/cwsdk-release.aar"/>
+		<resource-file src="src/android/aar/cwsdk-release.aar" target="aar/cwsdk-release.aar"/>
 	</platform>
 </plugin>
