@@ -42,8 +42,8 @@
 		<source-file src="src/android/libs/armeabi-v7a/libIGLBarDecoder.so" target-dir="libs/armeabi-v7a"/>
 		<source-file src="src/android/libs/armeabi-v7a/libIGLImageAE.so" target-dir="libs/armeabi-v7a"/>
 		<source-file src="src/android/libs/armeabi-v7a/libSDL.so" target-dir="libs/armeabi-v7a"/>
-		<source-file src="src/android/nl/xservices/plugins/Plugin_P80.java" target-dir="src/main/java/nl/xservices/plugins" />
-        <source-file src="src/android/nl/xservices/plugins/Plugin_U8.java" target-dir="src/main/java/nl/xservices/plugins" />
+		<source-file src="src/android/nl/xservices/plugins/Plugin_P80.java" target-dir="nl/xservices/plugins" />
+        <source-file src="src/android/nl/xservices/plugins/Plugin_U8.java" target-dir="nl/xservices/plugins" />
 		<config-file parent="/*" target="res/xml/config.xml">
 			<feature name="ZijinUtil"><param name="android-package" value="nl.xservices.plugins.ZijinUtil" /></feature>
 		</config-file>

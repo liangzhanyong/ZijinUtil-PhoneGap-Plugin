@@ -49,7 +49,7 @@ public class ZijinUtil extends CordovaPlugin {
                 barcodeUtility.enablePlaySuccessSound(cordova.getContext(), true);
                 barcodeUtility.enableVibrate(cordova.getContext(), true);
                 barcodeUtility.setScanFailureBroadcast(cordova.getContext(), false);
-                barcodeUtility.setContinuousScanIntervalTime(cordova.getContext(), 800);
+                barcodeUtility.setContinuousScanIntervalTime(cordova.getContext(), 100);
                 barcodeUtility.setContinuousScanTimeOut(cordova.getContext(), 3 * 60);
                 rfidWithUHF.init();
                 plugin_p80 = new Plugin_P80(cordova, barcodeUtility, rfidWithUHF);
@@ -121,7 +121,7 @@ public class ZijinUtil extends CordovaPlugin {
             }
 
         } else if (DEVTYPE_U8.equals(Build.MODEL)) {
-            cw.R2000UHFAPI().close();
+            plugin_u8.onDestroy();
         }
         cordova.getActivity().unregisterReceiver(receiver);
     }

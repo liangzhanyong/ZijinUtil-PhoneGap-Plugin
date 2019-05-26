@@ -58,7 +58,7 @@ ZijinUtil.prototype.writeTag = function (options, successCallback, errorCallback
 };
 
 ZijinUtil.prototype.reset = function () {
-  cordova.exec(null, null, "ZijinUtil", "reset", [options]);
+  cordova.exec(null, null, "ZijinUtil", "reset", [{}]);
 };
 
 ZijinUtil.prototype.setInventoryDelayMillis = function (delayMillis) {
@@ -67,6 +67,22 @@ ZijinUtil.prototype.setInventoryDelayMillis = function (delayMillis) {
 
 ZijinUtil.prototype.setOutputPower = function (mOutPower) {
   cordova.exec(null, null, "ZijinUtil", "setOutputPower", [{mOutPower: mOutPower}]);
+};
+
+ZijinUtil.prototype.openFingerprint = function () {
+  cordova.exec(null, null, "ZijinUtil", "openFingerprint", [{}]);
+};
+
+ZijinUtil.prototype.closeFingerprint = function () {
+  cordova.exec(null, null, "ZijinUtil", "closeFingerprint", [{}]);
+};
+
+ZijinUtil.prototype.scanFingerprint = function (successCallback, errorCallback) {
+  cordova.exec(successCallback, errorCallback, "ZijinUtil", "scanFingerprint", [{}]);
+};
+
+ZijinUtil.prototype.verifyFingerprint = function (fp1, fp2, successCallback, errorCallback) {
+  cordova.exec(successCallback, errorCallback, "ZijinUtil", "verifyFingerprint", [{fp1, fp2}]);
 };
 
 ZijinUtil.install = function () {

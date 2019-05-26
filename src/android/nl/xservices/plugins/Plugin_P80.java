@@ -10,7 +10,6 @@ import com.barcode.BarcodeUtility;
 import com.cw.cwsdk.u8API.uhf.helper.InventoryBuffer;
 import com.google.gson.Gson;
 import com.rscja.deviceapi.RFIDWithUHF;
-import com.rscja.deviceapi.exception.ConfigurationException;
 
 import org.apache.cordova.CallbackContext;
 import org.apache.cordova.CordovaInterface;
@@ -19,12 +18,17 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.util.Timer;
+import java.util.TimerTask;
+
 public class Plugin_P80 {
     private CordovaInterface cordova;
     private BarcodeUtility barcodeUtility;
     private RFIDWithUHF rfidWithUHF;
     private CallbackContext callback;
     private boolean continueScanner = false;
+    private BarCodeReceiver receiver = null;
+    private Timer timer = null;
     private boolean inventoryLoop = false;
     private InventoryBuffer inventoryResult = new InventoryBuffer();
 
@@ -166,13 +170,14 @@ public class Plugin_P80 {
 
     private void barCodeScanner(CallbackContext callbackId) {
         callback = callbackId;
-        BarCodeReceiver receiver = new BarCodeReceiver();
+        receiver = new BarCodeReceiver();
         IntentFilter filter = new IntentFilter();
         filter.addAction("com.scanner.broadcast");
         cordova.getActivity().registerReceiver(receiver, filter);
-        barcodeUtility.setScanResultBroadcast(cordova.getContext(), "com.scanner.broadcast", "");
+        barcodeUtility.setScanResultBroadcast(cordova.getContext(), "com.scanner.broadcast", "data");
         barcodeUtility.enableContinuousScan(cordova.getContext(),continueScanner);
         barcodeUtility.startScan(cordova.getContext(), BarcodeUtility.ModuleType.AUTOMATIC_ADAPTATION);
+        barCodeHandle();
     }
 
     private void writeTag(CallbackContext callbackId, JSONArray args) throws JSONException {
@@ -332,6 +337,25 @@ public class Plugin_P80 {
         rfidWithUHF.lockMem(btAryPassWord, btMemBank, btLockType);
     }
 
+    private void barCodeHandle() {
+        if (timer != null) {
+            timer.cancel();
+        }
+        TimerTask task = new TimerTask() {
+            @Override
+            public void run() {
+                if (continueScanner) {
+//                    barcodeUtility.stopScan(cordova.getContext(), BarcodeUtility.ModuleType.AUTOMATIC_ADAPTATION);
+                    barcodeUtility.startScan(cordova.getContext(), BarcodeUtility.ModuleType.AUTOMATIC_ADAPTATION);
+                    Log.i("Plugin_P80", "continue scan");
+                    barCodeHandle();
+                }
+            }
+        };
+        timer = new Timer();
+        timer.schedule(task, 5000);
+    }
+
     class BarCodeReceiver extends BroadcastReceiver {
 
         @Override
@@ -343,6 +367,7 @@ public class Plugin_P80 {
                     barCode = "00000" + barCode.substring(1);
                 }
                 if (continueScanner) {
+                    barCodeHandle();
                     PluginResult pr = new PluginResult(PluginResult.Status.OK, barCode);
                     pr.setKeepCallback(true);
                     callback.sendPluginResult(pr);
