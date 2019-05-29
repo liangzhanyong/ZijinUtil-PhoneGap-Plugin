@@ -363,6 +363,7 @@ public class Plugin_P80 {
             Log.i("BarCodeReceiver", intent.getAction());
             String barCode = intent.getStringExtra("data");
             if (barCode != null && !barCode.equals("")) {
+                barCode = barCode.replaceAll("\r|\n", "");
                 if (barCode.length() == 4 && (barCode.startsWith("C") || barCode.startsWith("S"))) {
                     barCode = "00000" + barCode.substring(1);
                 }
