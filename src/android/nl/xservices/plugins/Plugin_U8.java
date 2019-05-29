@@ -39,8 +39,8 @@ public class Plugin_U8 {
 
     public Plugin_U8(CordovaInterface cordova) {
         this.cordova = cordova;
-        mScanner = cw.FingerPrintAPI().Scanner(cordova.getContext());
-        cw.FingerPrintAPI().openUSB();
+//        mScanner = cw.FingerPrintAPI().Scanner(cordova.getContext());
+//        cw.FingerPrintAPI().openUSB();
     }
 
     public boolean execute(String action, JSONArray args, CallbackContext callbackContext) throws JSONException {
@@ -169,22 +169,22 @@ public class Plugin_U8 {
             return true;
         }
         else if(action.equals("openFingerprint")) {
-            openDevice();
+//            openDevice();
         }
         else if(action.equals("closeFingerprint")) {
-            closeDevice();
+//            closeDevice();
         }
         else if(action.equals("verifyFingerprint")) {
             cordova.getThreadPool().execute(() -> {
-                mTask = new FingerprintTask();
-                mTask.execute("verify");
+//                mTask = new FingerprintTask();
+//                mTask.execute("verify");
             });
             return true;
         }
         else if(action.equals("scanFingerprint")) {
             cordova.getThreadPool().execute(() -> {
-                mTask = new FingerprintTask();
-                mTask.execute("enroll");
+//                mTask = new FingerprintTask();
+//                mTask.execute("enroll");
             });
             return true;
         }
