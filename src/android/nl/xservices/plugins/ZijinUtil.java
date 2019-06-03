@@ -15,7 +15,6 @@ import org.json.JSONArray;
 import org.json.JSONException;
 
 import com.barcode.BarcodeUtility;
-import com.cw.cwsdk.cw;
 import com.rscja.deviceapi.RFIDWithUHF;
 import com.rscja.deviceapi.exception.ConfigurationException;
 
@@ -85,11 +84,10 @@ public class ZijinUtil extends CordovaPlugin {
         if (DEVTYPE_P80.equals(Build.MODEL)) {
             barcodeUtility.stopScan(cordova.getContext(), BarcodeUtility.ModuleType.AUTOMATIC_ADAPTATION);
         } else if (DEVTYPE_U8.equals(Build.MODEL)) {
-            cw.BarCodeAPI(cordova.getContext()).openBarCodeReceiver();
-            if (cw.BarCodeAPI(cordova.getContext()).isScannerServiceRunning(cordova.getActivity())) {
-
-            } else {
-                cw.BarCodeAPI(cordova.getContext()).CloseScanning();
+            plugin_u8.softDecodingAPI.openBarCodeReceiver();
+            if (plugin_u8.isScanning) {
+                plugin_u8.softDecodingAPI.setTime(800);
+                plugin_u8.softDecodingAPI.ContinuousScanning();
             }
         }
     }
@@ -102,12 +100,12 @@ public class ZijinUtil extends CordovaPlugin {
                 barcodeUtility.stopScan(cordova.getContext(), BarcodeUtility.ModuleType.AUTOMATIC_ADAPTATION);
             }
         } else if (DEVTYPE_U8.equals(Build.MODEL)) {
-            if(cw.R2000UHFAPI().getReaderHelper() != null && !!cw.R2000UHFAPI().getReaderHelper().getInventoryFlag()) {
-                cw.R2000UHFAPI().stopInventoryReal();
+            if(plugin_u8.r2000UHFAPI.getReaderHelper() != null && !!plugin_u8.r2000UHFAPI.getReaderHelper().getInventoryFlag()) {
+                plugin_u8.r2000UHFAPI.stopInventoryReal();
             }
-            cw.BarCodeAPI(cordova.getContext()).CloseScanning();
+            plugin_u8.softDecodingAPI.CloseScanning();
             //建议在onPause里或者监听屏幕息屏里放，息屏后可以省电
-            cw.BarCodeAPI(cordova.getContext()).closeBarCodeReceiver();
+            plugin_u8.softDecodingAPI.closeBarCodeReceiver();
         }
     }
 
@@ -145,7 +143,7 @@ public class ZijinUtil extends CordovaPlugin {
                             barcodeUtility.stopScan(cordova.getContext(), BarcodeUtility.ModuleType.AUTOMATIC_ADAPTATION);
                         }
                     } else if (DEVTYPE_U8.equals(Build.MODEL)) {
-                        cw.BarCodeAPI(cordova.getContext()).CloseScanning();
+                        plugin_u8.softDecodingAPI.CloseScanning();
                     }
                     break;
 
@@ -155,7 +153,7 @@ public class ZijinUtil extends CordovaPlugin {
                         if (barcodeUtility != null) {
                             barcodeUtility.stopScan(cordova.getContext(), BarcodeUtility.ModuleType.AUTOMATIC_ADAPTATION);
                         } else if (DEVTYPE_U8.equals(Build.MODEL)) {
-                            cw.BarCodeAPI(cordova.getContext()).CloseScanning();
+                            plugin_u8.softDecodingAPI.CloseScanning();
                         }
                     }
                     break;

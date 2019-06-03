@@ -7,7 +7,7 @@ import android.content.IntentFilter;
 import android.util.Log;
 
 import com.barcode.BarcodeUtility;
-import com.cw.cwsdk.u8API.uhf.helper.InventoryBuffer;
+import com.cw.r2000uhfsdk.helper.InventoryBuffer;
 import com.google.gson.Gson;
 import com.rscja.deviceapi.RFIDWithUHF;
 
@@ -175,7 +175,7 @@ public class Plugin_P80 {
         filter.addAction("com.scanner.broadcast");
         cordova.getActivity().registerReceiver(receiver, filter);
         barcodeUtility.setScanResultBroadcast(cordova.getContext(), "com.scanner.broadcast", "data");
-        barcodeUtility.enableContinuousScan(cordova.getContext(),continueScanner);
+        barcodeUtility.enableContinuousScan(cordova.getContext(),false);
         barcodeUtility.startScan(cordova.getContext(), BarcodeUtility.ModuleType.AUTOMATIC_ADAPTATION);
         barCodeHandle();
     }
@@ -368,6 +368,7 @@ public class Plugin_P80 {
                     barCode = "00000" + barCode.substring(1);
                 }
                 if (continueScanner) {
+                    barcodeUtility.startScan(cordova.getContext(), BarcodeUtility.ModuleType.AUTOMATIC_ADAPTATION);
                     barCodeHandle();
                     PluginResult pr = new PluginResult(PluginResult.Status.OK, barCode);
                     pr.setKeepCallback(true);

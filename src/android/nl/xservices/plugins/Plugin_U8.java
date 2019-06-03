@@ -1,19 +1,15 @@
 package nl.xservices.plugins;
 
 import android.os.AsyncTask;
-import android.os.Build;
-import android.provider.Settings;
-import android.util.Log;
 
-import com.cw.cwsdk.cw;
-import com.cw.cwsdk.u8API.barcode.BarCodeAPI;
-import com.cw.cwsdk.u8API.idcard.ParseSFZAPI;
-import com.cw.cwsdk.u8API.uhf.IOnCommonReceiver;
-import com.cw.cwsdk.u8API.uhf.IOnInventoryRealReceiver;
-import com.cw.cwsdk.u8API.uhf.IOnTagOperation;
-import com.cw.cwsdk.u8API.uhf.base.CMD;
-import com.cw.cwsdk.u8API.uhf.helper.InventoryBuffer;
-import com.cw.cwsdk.u8API.uhf.helper.OperateTagBuffer;
+import com.cw.barcodesdk.SoftDecodingAPI;
+import com.cw.r2000uhfsdk.IOnCommonReceiver;
+import com.cw.r2000uhfsdk.IOnInventoryRealReceiver;
+import com.cw.r2000uhfsdk.IOnTagOperation;
+import com.cw.r2000uhfsdk.R2000UHFAPI;
+import com.cw.r2000uhfsdk.base.CMD;
+import com.cw.r2000uhfsdk.helper.InventoryBuffer;
+import com.cw.r2000uhfsdk.helper.OperateTagBuffer;
 import com.google.gson.Gson;
 
 import org.apache.cordova.CallbackContext;
@@ -24,34 +20,33 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import cn.com.aratek.fp.Bione;
-import cn.com.aratek.fp.FingerprintImage;
-import cn.com.aratek.fp.FingerprintScanner;
-import cn.com.aratek.util.Result;
 
-public class Plugin_U8 {
-    private static final boolean IS_AT_LEAST_LOLLIPOP = Build.VERSION.SDK_INT >= 21;
+
+public class Plugin_U8 implements SoftDecodingAPI.IBarCodeData {
     private static final String TAG = "Plugin_U8";
     private static final String FP_DB_PATH = "/sdcard/fp.db";
+    private CallbackContext callbackContext;
+    public R2000UHFAPI r2000UHFAPI;
+    public SoftDecodingAPI softDecodingAPI;
+    public boolean isScanning = false;
     CordovaInterface cordova;
-    private FingerprintScanner mScanner;
-    private FingerprintTask mTask;
+//    private FingerprintScanner mScanner;
+//    private FingerprintTask mTask;
 
     public Plugin_U8(CordovaInterface cordova) {
         this.cordova = cordova;
+        this.r2000UHFAPI = R2000UHFAPI.getInstance();
+        this.softDecodingAPI = new SoftDecodingAPI(cordova.getContext(), this);
 //        mScanner = cw.FingerPrintAPI().Scanner(cordova.getContext());
 //        cw.FingerPrintAPI().openUSB();
     }
 
     public boolean execute(String action, JSONArray args, CallbackContext callbackContext) throws JSONException {
         if (action.equals("openUHF")) {
-            cordova.getActivity().runOnUiThread(() -> {
-                cw.R2000UHFAPI().open(IS_AT_LEAST_LOLLIPOP ? cordova.getActivity().getWindow().getContext() : cordova.getActivity().getApplicationContext());
-            });
+            cordova.getActivity().runOnUiThread(() -> r2000UHFAPI.open(cordova.getContext()));
             return true;
         }
         else if(action.equals("startInventoryReal")) {
-//            cordova.getActivity().runOnUiThread(new Runnable() {
             cordova.getThreadPool().execute(() -> startInventoryReal(callbackContext));
             PluginResult pr = new PluginResult(PluginResult.Status.NO_RESULT);
             pr.setKeepCallback(true);
@@ -59,17 +54,15 @@ public class Plugin_U8 {
             return true;
         }
         else if(action.equals("stopInventoryReal")) {
-//            cordova.getActivity().runOnUiThread(new Runnable() {
             cordova.getThreadPool().execute(() -> {
-                if(cw.R2000UHFAPI().getReaderHelper() != null && !!cw.R2000UHFAPI().getReaderHelper().getInventoryFlag()) {
-                    cw.R2000UHFAPI().stopInventoryReal();
+                if(r2000UHFAPI.getReaderHelper() != null && !!r2000UHFAPI.getReaderHelper().getInventoryFlag()) {
+                    r2000UHFAPI.stopInventoryReal();
                 }
             });
             return true;
         }
         else if(action.equals("closeUHF")) {
-//            cordova.getActivity().runOnUiThread(new Runnable() {
-            cordova.getThreadPool().execute(() -> cw.R2000UHFAPI().close());
+            cordova.getThreadPool().execute(() -> r2000UHFAPI.close());
             return true;
         }
         else if(action.equals("scan")) {
@@ -84,7 +77,10 @@ public class Plugin_U8 {
             return true;
         }
         else if(action.equals("closeScanning")) {
-            cordova.getThreadPool().execute(() -> cw.BarCodeAPI(cordova.getContext()).CloseScanning());
+            cordova.getThreadPool().execute(() -> {
+                this.isScanning = false;
+                softDecodingAPI.CloseScanning();
+            });
             return true;
         }
         else if(action.equals("setScanner")) {
@@ -92,12 +88,12 @@ public class Plugin_U8 {
             return true;
         }
         else if(action.equals("setScanInterval")) {
-            cw.BarCodeAPI(cordova.getContext()).setTime(args.getJSONObject(0).getInt("time"));
+            softDecodingAPI.setTime(args.getJSONObject(0).getInt("time"));
             return true;
         }
         else if(action.equals("getReaderTemperature")) {
             cordova.getThreadPool().execute(() -> {
-                cw.R2000UHFAPI().setOnCommonReceiver(new IOnCommonReceiver() {
+                r2000UHFAPI.setOnCommonReceiver(new IOnCommonReceiver() {
                     @Override
                     public void onReceiver(byte cmd, Object result) {
                         switch (cmd) {
@@ -112,7 +108,7 @@ public class Plugin_U8 {
 
                     }
                 });
-                cw.R2000UHFAPI().getReaderTemperature();
+                r2000UHFAPI.getReaderTemperature();
             });
             return true;
         }
@@ -157,22 +153,22 @@ public class Plugin_U8 {
             return true;
         }
         else if(action.equals("reset")) {
-            cw.R2000UHFAPI().reset();
+            r2000UHFAPI.reset();
             return true;
         }
         else if(action.equals("setInventoryDelayMillis")) {
-            cw.R2000UHFAPI().setInventoryDelayMillis(args.getJSONObject(0).getInt("delayMillis"));
+            r2000UHFAPI.setInventoryDelayMillis(args.getJSONObject(0).getInt("delayMillis"));
             return true;
         }
         else if(action.equals("setOutputPower")) {
-            cw.R2000UHFAPI().setOutputPower(args.getJSONObject(0).getInt("mOutPower"));
+            r2000UHFAPI.setOutputPower(args.getJSONObject(0).getInt("mOutPower"));
             return true;
         }
         else if(action.equals("openFingerprint")) {
-//            openDevice();
+            openDevice();
         }
         else if(action.equals("closeFingerprint")) {
-//            closeDevice();
+            closeDevice();
         }
         else if(action.equals("verifyFingerprint")) {
             cordova.getThreadPool().execute(() -> {
@@ -193,8 +189,8 @@ public class Plugin_U8 {
 
     private void startInventoryReal(CallbackContext callbackId) {
         try {
-            cw.R2000UHFAPI().startInventoryReal("1");
-            cw.R2000UHFAPI().setOnInventoryRealReceiver(new IOnInventoryRealReceiver() {
+            r2000UHFAPI.startInventoryReal("1");
+            r2000UHFAPI.setOnInventoryRealReceiver(new IOnInventoryRealReceiver() {
                 @Override
                 public void realTimeInventory() {
 
@@ -238,76 +234,20 @@ public class Plugin_U8 {
     }
 
     private void barCodeScanner(CallbackContext callbackId) {
-        cw.BarCodeAPI(cordova.getContext()).setOnBarCodeDataListener(new BarCodeAPI.IBarCodeData() {
-            @Override
-            public void sendScan() {
-
-            }
-
-            @Override
-            public void onBarCodeData(String s) {
-                if("No decoded message available.".equals(s)) {
-                    callbackId.error(s);
-                } else {
-                    callbackId.success(s.replaceAll("\r|\n", ""));
-                }
-            }
-
-            @Override
-            public void getSettings(int i, int i1, int i2, String s, String s1, int i3, int i4) {
-
-            }
-
-            @Override
-            public void setSettingsSuccess() {
-
-            }
-        });
-        cw.BarCodeAPI(cordova.getContext()).scan();
+        isScanning = false;
+        callbackContext = callbackId;
+        softDecodingAPI.scan();
     }
 
     private void continueScanning(CallbackContext callbackId) {
-        cw.BarCodeAPI(cordova.getContext()).setOnBarCodeDataListener(new BarCodeAPI.IBarCodeData() {
-            @Override
-            public void sendScan() {
-
-            }
-
-            @Override
-            public void onBarCodeData(String s) {
-                LOG.i("onBarCodeData", s);
-                PluginResult.Status status;
-                if(s.isEmpty() || s.contains("No decoded message available.")) {
-//                    status = PluginResult.Status.ERROR;
-                    return;
-                } else {
-                    status = PluginResult.Status.OK;
-                }
-                String result = s.replaceAll("\r|\n", "");
-                if (result.length() == 4 && (result.startsWith("C") || result.startsWith("S"))) {
-                    result = "00000" + result.substring(1);
-                }
-                PluginResult pr = new PluginResult(status, result);
-                pr.setKeepCallback(true);
-                callbackId.sendPluginResult(pr);
-            }
-
-            @Override
-            public void getSettings(int i, int i1, int i2, String s, String s1, int i3, int i4) {
-
-            }
-
-            @Override
-            public void setSettingsSuccess() {
-
-            }
-        });
-        cw.BarCodeAPI(cordova.getContext()).setTime(Settings.System.getInt(cordova.getActivity().getContentResolver(), "scan_timeout", 800));
-        cw.BarCodeAPI(cordova.getContext()).ContinuousScanning();
+        isScanning = true;
+        callbackContext = callbackId;
+        softDecodingAPI.setTime(800);
+        softDecodingAPI.ContinuousScanning();
     }
 
     private void writeTag(CallbackContext callbackId, JSONArray args) throws JSONException {
-        cw.R2000UHFAPI().setOnTagOperation(new IOnTagOperation() {
+        r2000UHFAPI.setOnTagOperation(new IOnTagOperation() {
             @Override
             public void getAccessEpcMatch(OperateTagBuffer operateTagBuffer) {
 
@@ -344,11 +284,11 @@ public class Plugin_U8 {
         String btWordCnt = params.getString("btWordCnt");
         String btAryPassWord = params.getString("btAryPassWord");
         String data = params.getString("data");
-        cw.R2000UHFAPI().writeTag(btMemBank, btWordAdd, btWordCnt, btAryPassWord, data);
+        r2000UHFAPI.writeTag(btMemBank, btWordAdd, btWordCnt, btAryPassWord, data);
     }
 
     private void readTag(CallbackContext callbackId, JSONArray args) throws JSONException {
-        cw.R2000UHFAPI().setOnTagOperation(new IOnTagOperation() {
+        r2000UHFAPI.setOnTagOperation(new IOnTagOperation() {
             @Override
             public void getAccessEpcMatch(OperateTagBuffer operateTagBuffer) {
 
@@ -384,11 +324,11 @@ public class Plugin_U8 {
         String btWordAdd = params.getString("btWordAdd");
         String btWordCnt = params.getString("btWordCnt");
         String btAryPassWord = params.getString("btAryPassWord");
-        cw.R2000UHFAPI().readTag(btMemBank, btWordAdd, btWordCnt, btAryPassWord);
+        r2000UHFAPI.readTag(btMemBank, btWordAdd, btWordCnt, btAryPassWord);
     }
 
     private void killTag(CallbackContext callbackId, JSONArray args) throws JSONException {
-        cw.R2000UHFAPI().setOnTagOperation(new IOnTagOperation() {
+        r2000UHFAPI.setOnTagOperation(new IOnTagOperation() {
             @Override
             public void getAccessEpcMatch(OperateTagBuffer operateTagBuffer) {
 
@@ -421,11 +361,11 @@ public class Plugin_U8 {
         });
         JSONObject params = args.getJSONObject(0);
         String btAryPassWord = params.getString("btAryPassWord");
-        cw.R2000UHFAPI().killTag(btAryPassWord);
+        r2000UHFAPI.killTag(btAryPassWord);
     }
 
     private void lockTag(CallbackContext callbackId, JSONArray args) throws JSONException {
-        cw.R2000UHFAPI().setOnTagOperation(new IOnTagOperation() {
+        r2000UHFAPI.setOnTagOperation(new IOnTagOperation() {
             @Override
             public void getAccessEpcMatch(OperateTagBuffer operateTagBuffer) {
 
@@ -460,7 +400,7 @@ public class Plugin_U8 {
         String btAryPassWord = params.getString("btAryPassWord");
         Byte btMemBank = Byte.valueOf(params.getString("btMemBank"));
         Byte btLockType = Byte.valueOf(params.getString("btLockType"));
-        cw.R2000UHFAPI().lockTag(btAryPassWord, btMemBank, btLockType);
+        r2000UHFAPI.lockTag(btAryPassWord, btMemBank, btLockType);
     }
 
     private void openDevice() {
@@ -468,14 +408,14 @@ public class Plugin_U8 {
             @Override
             public void run() {
                 synchronized (cordova.getContext()) {
-                    if (mScanner.open() != FingerprintScanner.RESULT_OK) {
-                        //Toast.makeText(FingerprintActivity.this, "------"+error, Toast.LENGTH_SHORT).show();
-                    } else {
-                    }
-                    if (cw.FingerPrintAPI().initialize(cordova.getContext(), FP_DB_PATH) != Bione.RESULT_OK) {
-                    }
-
-                    Log.i(TAG, "Fingerprint algorithm version: " + cw.FingerPrintAPI().getVersion());
+//                    if (mScanner.open() != FingerprintScanner.RESULT_OK) {
+//                        //Toast.makeText(FingerprintActivity.this, "------"+error, Toast.LENGTH_SHORT).show();
+//                    } else {
+//                    }
+//                    if (cw.FingerPrintAPI().initialize(cordova.getContext(), FP_DB_PATH) != Bione.RESULT_OK) {
+//                    }
+//
+//                    Log.i(TAG, "Fingerprint algorithm version: " + cw.FingerPrintAPI().getVersion());
                 }
             }
         }.start();
@@ -486,23 +426,61 @@ public class Plugin_U8 {
             @Override
             public void run() {
                 synchronized (cordova.getContext()) {
-                    if (mTask != null && mTask.getStatus() != AsyncTask.Status.FINISHED) {
-                        mTask.cancel(false);
-                        mTask.waitForDone();
-                    }
-                    if (mScanner.close() != FingerprintScanner.RESULT_OK) {
-                    } else {
-                    }
-                    if (cw.FingerPrintAPI().exit() != Bione.RESULT_OK) {
-                    }
+//                    if (mTask != null && mTask.getStatus() != AsyncTask.Status.FINISHED) {
+//                        mTask.cancel(false);
+//                        mTask.waitForDone();
+//                    }
+//                    if (mScanner.close() != FingerprintScanner.RESULT_OK) {
+//                    } else {
+//                    }
+//                    if (cw.FingerPrintAPI().exit() != Bione.RESULT_OK) {
+//                    }
                 }
             }
         }.start();
     }
 
     public void onDestroy() {
-        cw.R2000UHFAPI().close();
-        cw.FingerPrintAPI().closeUSB();
+        r2000UHFAPI.close();
+//        cw.FingerPrintAPI().closeUSB();
+    }
+
+    @Override
+    public void sendScan() {
+
+    }
+
+    @Override
+    public void onBarCodeData(String s) {
+        LOG.i("onBarCodeData", s);
+        PluginResult.Status status;
+        if(s.isEmpty() || s.contains("No decoded message available.")) {
+//                    status = PluginResult.Status.ERROR;
+            return;
+        } else {
+            status = PluginResult.Status.OK;
+        }
+        String result = s.replaceAll("\r|\n", "");
+        if (result.length() == 4 && (result.startsWith("C") || result.startsWith("S"))) {
+            result = "00000" + result.substring(1);
+        }
+        if (isScanning) {
+            PluginResult pr = new PluginResult(status, result);
+            pr.setKeepCallback(true);
+            callbackContext.sendPluginResult(pr);
+        } else {
+            callbackContext.success(result);
+        }
+    }
+
+    @Override
+    public void getSettings(int i, int i1, int i2, String s, String s1, int i3, int i4) {
+
+    }
+
+    @Override
+    public void setSettingsSuccess() {
+
     }
 
     private class FingerprintTask extends AsyncTask<String, Integer, Void> {
@@ -523,79 +501,79 @@ public class Plugin_U8 {
          */
         @Override
         protected Void doInBackground(String... params) {
-            FingerprintImage fi = null;
-            byte[] fpFeat = null, fpTemp = null;
-            Result res;
-
-            do {
-                if (params[0].equals("enroll") || params[0].equals("verify")) {
-                    int capRetry = 0;
-                    mScanner.prepare();
-                    do {
-                        res = mScanner.capture();
-                        fi = (FingerprintImage) res.data;
-                        int quality;
-                        if (fi != null) {
-                            quality = cw.FingerPrintAPI().getFingerprintQuality(fi);
-                            Log.i(TAG, "Fingerprint image quality is " + quality);
-                            if (quality < 50 && capRetry < 3 && !isCancelled()) {
-                                capRetry++;
-                                continue;
-                            }
-                        }
-
-                        if (res.error != FingerprintScanner.NO_FINGER || isCancelled()) {
-                            break;
-                        }
-
-                    } while (true);
-                    mScanner.finish();
-
-                    if (isCancelled()) {
-                        break;
-                    }
-
-                    if (res.error != FingerprintScanner.RESULT_OK) {
-                        break;
-                    }
-
-                }
-
-                if (params[0].equals("enroll") || params[0].equals("verify")) {
-                    res = cw.FingerPrintAPI().extractFeature(fi);
-                    if (res.error != Bione.RESULT_OK) {
-                        break;
-                    }
-                    fpFeat = (byte[]) res.data;
-                }
-
-                if (params[0].equals("enroll")) {//注册
-                    res = cw.FingerPrintAPI().makeTemplate(fpFeat, fpFeat, fpFeat);
-                    if (res.error != Bione.RESULT_OK) {
-                        break;
-                    }
-                    fpTemp = (byte[]) res.data;
-                    Log.i(TAG, String.valueOf(fpTemp));
-                    int id = cw.FingerPrintAPI().getFreeID();
-                    if (id < 0) {
-                        break;
-                    }
-                    int ret = cw.FingerPrintAPI().enroll(id, fpTemp);
-                    if (ret != Bione.RESULT_OK) {
-                        break;
-                    }
-                } else if (params[0].equals("verify")) {//比对
-                    res = cw.FingerPrintAPI().verify(fpTemp, fpFeat);
-                    if (res.error != Bione.RESULT_OK) {
-                        break;
-                    }
-                    if ((Boolean) res.data) {
-                    } else {
-                    }
-                }
-            } while (false);
-
-            mIsDone = true;
+//            FingerprintImage fi = null;
+//            byte[] fpFeat = null, fpTemp = null;
+//            Result res;
+//
+//            do {
+//                if (params[0].equals("enroll") || params[0].equals("verify")) {
+//                    int capRetry = 0;
+//                    mScanner.prepare();
+//                    do {
+//                        res = mScanner.capture();
+//                        fi = (FingerprintImage) res.data;
+//                        int quality;
+//                        if (fi != null) {
+//                            quality = cw.FingerPrintAPI().getFingerprintQuality(fi);
+//                            Log.i(TAG, "Fingerprint image quality is " + quality);
+//                            if (quality < 50 && capRetry < 3 && !isCancelled()) {
+//                                capRetry++;
+//                                continue;
+//                            }
+//                        }
+//
+//                        if (res.error != FingerprintScanner.NO_FINGER || isCancelled()) {
+//                            break;
+//                        }
+//
+//                    } while (true);
+//                    mScanner.finish();
+//
+//                    if (isCancelled()) {
+//                        break;
+//                    }
+//
+//                    if (res.error != FingerprintScanner.RESULT_OK) {
+//                        break;
+//                    }
+//
+//                }
+//
+//                if (params[0].equals("enroll") || params[0].equals("verify")) {
+//                    res = cw.FingerPrintAPI().extractFeature(fi);
+//                    if (res.error != Bione.RESULT_OK) {
+//                        break;
+//                    }
+//                    fpFeat = (byte[]) res.data;
+//                }
+//
+//                if (params[0].equals("enroll")) {//注册
+//                    res = cw.FingerPrintAPI().makeTemplate(fpFeat, fpFeat, fpFeat);
+//                    if (res.error != Bione.RESULT_OK) {
+//                        break;
+//                    }
+//                    fpTemp = (byte[]) res.data;
+//                    Log.i(TAG, String.valueOf(fpTemp));
+//                    int id = cw.FingerPrintAPI().getFreeID();
+//                    if (id < 0) {
+//                        break;
+//                    }
+//                    int ret = cw.FingerPrintAPI().enroll(id, fpTemp);
+//                    if (ret != Bione.RESULT_OK) {
+//                        break;
+//                    }
+//                } else if (params[0].equals("verify")) {//比对
+//                    res = cw.FingerPrintAPI().verify(fpTemp, fpFeat);
+//                    if (res.error != Bione.RESULT_OK) {
+//                        break;
+//                    }
+//                    if ((Boolean) res.data) {
+//                    } else {
+//                    }
+//                }
+//            } while (false);
+//
+//            mIsDone = true;
             return null;
         }
 
