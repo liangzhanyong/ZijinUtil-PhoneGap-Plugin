@@ -81,8 +81,8 @@ ZijinUtil.prototype.scanFingerprint = function (successCallback, errorCallback) 
   cordova.exec(successCallback, errorCallback, "ZijinUtil", "scanFingerprint", [{}]);
 };
 
-ZijinUtil.prototype.verifyFingerprint = function (fp1, fp2, successCallback, errorCallback) {
-  cordova.exec(successCallback, errorCallback, "ZijinUtil", "verifyFingerprint", [{fp1, fp2}]);
+ZijinUtil.prototype.verifyFingerprint = function (charArray, successCallback, errorCallback) {
+  cordova.exec(successCallback, errorCallback, "ZijinUtil", "verifyFingerprint", [{chars: charArray.join('$')}]);
 };
 
 ZijinUtil.install = function () {

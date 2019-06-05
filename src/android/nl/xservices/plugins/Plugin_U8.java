@@ -1,8 +1,13 @@
 package nl.xservices.plugins;
 
+import android.hardware.usb.UsbDevice;
+import android.hardware.usb.UsbManager;
 import android.os.AsyncTask;
+import android.util.Log;
+import android.widget.Toast;
 
 import com.cw.barcodesdk.SoftDecodingAPI;
+import com.cw.fpjrasdk.USBFingerManager;
 import com.cw.r2000uhfsdk.IOnCommonReceiver;
 import com.cw.r2000uhfsdk.IOnInventoryRealReceiver;
 import com.cw.r2000uhfsdk.IOnTagOperation;
@@ -10,7 +15,9 @@ import com.cw.r2000uhfsdk.R2000UHFAPI;
 import com.cw.r2000uhfsdk.base.CMD;
 import com.cw.r2000uhfsdk.helper.InventoryBuffer;
 import com.cw.r2000uhfsdk.helper.OperateTagBuffer;
+import com.cw.serialportsdk.utils.DataUtils;
 import com.google.gson.Gson;
+import com.synochip.sdk.ukey.SyOTG_Key;
 
 import org.apache.cordova.CallbackContext;
 import org.apache.cordova.CordovaInterface;
@@ -20,25 +27,33 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-
-
 public class Plugin_U8 implements SoftDecodingAPI.IBarCodeData {
     private static final String TAG = "Plugin_U8";
-    private static final String FP_DB_PATH = "/sdcard/fp.db";
+    private static int IMAGE_X = 256;
+    private static int IMAGE_Y = 288;
+
     private CallbackContext callbackContext;
     public R2000UHFAPI r2000UHFAPI;
+
     public SoftDecodingAPI softDecodingAPI;
     public boolean isScanning = false;
+
+    private SyOTG_Key msyUsbKey;
+    private boolean fpOpened = false;
+    private static final int PS_NO_FINGER = 0x02;
+    private static final int PS_OK = 0x00;
+    private static int fingerCnt = 1;
+    byte[] fingerBuf = new byte[IMAGE_X * IMAGE_Y];
+    byte[] g_TempData = new byte[512];
+    String[] verifyList = {};
+
     CordovaInterface cordova;
-//    private FingerprintScanner mScanner;
-//    private FingerprintTask mTask;
 
     public Plugin_U8(CordovaInterface cordova) {
         this.cordova = cordova;
         this.r2000UHFAPI = R2000UHFAPI.getInstance();
         this.softDecodingAPI = new SoftDecodingAPI(cordova.getContext(), this);
-//        mScanner = cw.FingerPrintAPI().Scanner(cordova.getContext());
-//        cw.FingerPrintAPI().openUSB();
+        USBFingerManager.getInstance(cordova.getContext()).setDelayMs(500);
     }
 
     public boolean execute(String action, JSONArray args, CallbackContext callbackContext) throws JSONException {
@@ -172,15 +187,24 @@ public class Plugin_U8 implements SoftDecodingAPI.IBarCodeData {
         }
         else if(action.equals("verifyFingerprint")) {
             cordova.getThreadPool().execute(() -> {
-//                mTask = new FingerprintTask();
-//                mTask.execute("verify");
+                JSONObject params;
+                try {
+                    params = args.getJSONObject(0);
+                    verifyList = params.getString("chars").split("\\$");
+                } catch (JSONException e) {
+                    e.printStackTrace();
+                }
+                this.callbackContext = callbackContext;
+                SearchAsyncTask asyncTask_search = new SearchAsyncTask();
+                asyncTask_search.execute(1);
             });
             return true;
         }
         else if(action.equals("scanFingerprint")) {
             cordova.getThreadPool().execute(() -> {
-//                mTask = new FingerprintTask();
-//                mTask.execute("enroll");
+                this.callbackContext = callbackContext;
+                ImputAsyncTask asyncTask = new ImputAsyncTask();
+                asyncTask.execute(1);
             });
             return true;
         }
@@ -404,45 +428,48 @@ public class Plugin_U8 implements SoftDecodingAPI.IBarCodeData {
     }
 
     private void openDevice() {
-        new Thread() {
+        USBFingerManager.getInstance(cordova.getContext()).openUSB(new USBFingerManager.OnUSBFingerListener() {
             @Override
-            public void run() {
-                synchronized (cordova.getContext()) {
-//                    if (mScanner.open() != FingerprintScanner.RESULT_OK) {
-//                        //Toast.makeText(FingerprintActivity.this, "------"+error, Toast.LENGTH_SHORT).show();
-//                    } else {
-//                    }
-//                    if (cw.FingerPrintAPI().initialize(cordova.getContext(), FP_DB_PATH) != Bione.RESULT_OK) {
-//                    }
-//
-//                    Log.i(TAG, "Fingerprint algorithm version: " + cw.FingerPrintAPI().getVersion());
+            public void onOpenUSBFingerSuccess(String s, UsbManager usbManager, UsbDevice usbDevice) {
+                if (s.equals(USBFingerManager.BYD_SMALL_DEVICE)) {
+
+                    msyUsbKey = new SyOTG_Key(usbManager, usbDevice);
+                    int ret = msyUsbKey.SyOpen();
+                    if (ret == SyOTG_Key.DEVICE_SUCCESS) {
+                        Log.e(TAG, "open device success!");
+                        fpOpened = true;
+                    } else {
+                        Toast.makeText(cordova.getContext(), "open device fail error code :" + ret, Toast.LENGTH_SHORT).show();
+                    }
                 }
             }
-        }.start();
+
+            @Override
+            public void onOpenUSBFingerFailure(String s) {
+                Toast.makeText(cordova.getContext(), s, Toast.LENGTH_SHORT).show();
+            }
+        });
     }
 
+    /**
+     * 关闭指纹设备
+     */
     private void closeDevice() {
-        new Thread() {
-            @Override
-            public void run() {
-                synchronized (cordova.getContext()) {
-//                    if (mTask != null && mTask.getStatus() != AsyncTask.Status.FINISHED) {
-//                        mTask.cancel(false);
-//                        mTask.waitForDone();
-//                    }
-//                    if (mScanner.close() != FingerprintScanner.RESULT_OK) {
-//                    } else {
-//                    }
-//                    if (cw.FingerPrintAPI().exit() != Bione.RESULT_OK) {
-//                    }
-                }
+        try {
+            if (msyUsbKey != null) {
+                msyUsbKey.SyClose();
             }
-        }.start();
+            Log.e(TAG, "Device Closed");
+            fpOpened = false;
+            USBFingerManager.getInstance(cordova.getContext()).closeUSB();
+        } catch (Exception e) {
+            Toast.makeText(cordova.getContext(), "Exception: => " + e.toString(), Toast.LENGTH_SHORT).show();
+        }
     }
 
     public void onDestroy() {
         r2000UHFAPI.close();
-//        cw.FingerPrintAPI().closeUSB();
+        closeDevice();
     }
 
     @Override
@@ -483,132 +510,143 @@ public class Plugin_U8 implements SoftDecodingAPI.IBarCodeData {
 
     }
 
-    private class FingerprintTask extends AsyncTask<String, Integer, Void> {
-        private boolean mIsDone = false;
+    /**
+     * 采集指纹
+     */
+    private class ImputAsyncTask extends AsyncTask<Integer, String, Integer> {
 
-        /**
-         * 这个方法是在执行异步任务之前的时候执行，并且是在UI Thread当中执行的，通常我们在这个方法里做一些UI控件的初始化的操作，例如弹出要给ProgressDialog
-         */
+        @Override
+        protected Integer doInBackground(Integer... params) {
+            int cnt = 1;
+            int ret;
+            while (true) {
+                if (fpOpened == false) {
+                    return -1;
+                }
+
+                // 两次采集指纹间隔
+                try {
+                    Thread.sleep(200);
+                } catch (Exception e) {
+                    Log.i(TAG, e.toString());
+                }
+
+                while (msyUsbKey.SyGetImage() == PS_NO_FINGER) {
+                    if (fpOpened == false) {
+                        Log.e(TAG, "设备未打开!");
+                        return -1;
+                    }
+
+                    try {
+                        Thread.sleep(200);
+                    } catch (Exception e) {
+                    }
+                }
+
+                if ((ret = msyUsbKey.SyEnroll(cnt, fingerCnt)) != PS_OK) {
+                    Log.e(TAG, "Sy Enroll:" + ret);
+                    callbackContext.error("Sy Enroll:" + ret);
+                    return -1;
+                }
+
+                if (cnt >= 2) {
+                    int i = msyUsbKey.SyUpChar(-1, g_TempData);
+                    if (i == 0) {
+                        Log.e(TAG, "特征值: " + DataUtils.bytesToHexString(g_TempData));
+                        callbackContext.success(DataUtils.bytesToHexString(g_TempData));
+                    }
+                    return 0;
+                }
+                cnt++;
+            }
+        }
+
+        @Override
+        protected void onPostExecute(Integer result) {
+            if (0 == result) {
+                if (fingerCnt > 256) {
+                    Log.i(TAG, "fingerCnt > 256");
+                    return;
+                }
+                fingerCnt++;
+                Log.i(TAG, "Enroll Success fingerCnt = " + fingerCnt);
+                return;
+            } else {
+                Log.i(TAG, "Enroll Error " + result);
+                return;
+            }
+        }
+
         @Override
         protected void onPreExecute() {
+            Log.i(TAG, "Please press finger...");
+            return;
         }
+    }
 
-        /**
-         * 处理异步任务的方法
-         *
-         * @param params
-         * @return
-         */
-        @Override
-        protected Void doInBackground(String... params) {
-//            FingerprintImage fi = null;
-//            byte[] fpFeat = null, fpTemp = null;
-//            Result res;
-//
-//            do {
-//                if (params[0].equals("enroll") || params[0].equals("verify")) {
-//                    int capRetry = 0;
-//                    mScanner.prepare();
-//                    do {
-//                        res = mScanner.capture();
-//                        fi = (FingerprintImage) res.data;
-//                        int quality;
-//                        if (fi != null) {
-//                            quality = cw.FingerPrintAPI().getFingerprintQuality(fi);
-//                            Log.i(TAG, "Fingerprint image quality is " + quality);
-//                            if (quality < 50 && capRetry < 3 && !isCancelled()) {
-//                                capRetry++;
-//                                continue;
-//                            }
-//                        }
-//
-//                        if (res.error != FingerprintScanner.NO_FINGER || isCancelled()) {
-//                            break;
-//                        }
-//
-//                    } while (true);
-//                    mScanner.finish();
-//
-//                    if (isCancelled()) {
-//                        break;
-//                    }
-//
-//                    if (res.error != FingerprintScanner.RESULT_OK) {
-//                        break;
-//                    }
-//
-//                }
-//
-//                if (params[0].equals("enroll") || params[0].equals("verify")) {
-//                    res = cw.FingerPrintAPI().extractFeature(fi);
-//                    if (res.error != Bione.RESULT_OK) {
-//                        break;
-//                    }
-//                    fpFeat = (byte[]) res.data;
-//                }
-//
-//                if (params[0].equals("enroll")) {//注册
-//                    res = cw.FingerPrintAPI().makeTemplate(fpFeat, fpFeat, fpFeat);
-//                    if (res.error != Bione.RESULT_OK) {
-//                        break;
-//                    }
-//                    fpTemp = (byte[]) res.data;
-//                    Log.i(TAG, String.valueOf(fpTemp));
-//                    int id = cw.FingerPrintAPI().getFreeID();
-//                    if (id < 0) {
-//                        break;
-//                    }
-//                    int ret = cw.FingerPrintAPI().enroll(id, fpTemp);
-//                    if (ret != Bione.RESULT_OK) {
-//                        break;
-//                    }
-//                } else if (params[0].equals("verify")) {//比对
-//                    res = cw.FingerPrintAPI().verify(fpTemp, fpFeat);
-//                    if (res.error != Bione.RESULT_OK) {
-//                        break;
-//                    }
-//                    if ((Boolean) res.data) {
-//                    } else {
-//                    }
-//                }
-//            } while (false);
-//
-//            mIsDone = true;
-            return null;
-        }
-
-        /**
-         * 当我们的异步任务执行完之后，就会将结果返回给这个方法，这个方法也是在UI Thread当中调用的，我们可以将返回的结果显示在UI控件上
-         *
-         * @param result
-         */
-        @Override
-        protected void onPostExecute(Void result) {
-        }
-
-        /**
-         * 这个方法也是在UI Thread当中执行的，我们在异步任务执行的时候，有时候需要将执行的进度返回给我们的UI界面
-         *
-         * @param values
-         */
-        @Override
-        protected void onProgressUpdate(Integer... values) {
-
-        }
+    /**
+     * 搜索指纹
+     */
+    private class SearchAsyncTask extends AsyncTask<Integer, String, Integer> {
+        @SuppressWarnings("unused")
+        private int ret;
 
         @Override
-        protected void onCancelled() {
+        protected Integer doInBackground(Integer... params) {
+            int[] fingerId = new int[1];
+            while (true) {
+                if (fpOpened == false) {
+                    return -1;
+                }
+                while (msyUsbKey.SyGetImage() == PS_NO_FINGER) {
+                    if (fpOpened == false) {
+                        return -1;
+                    }
 
-        }
+                    try {
+                        Thread.sleep(400);
+                    } catch (Exception e) {
+                        // TODO: handle exception
+                    }
+                    try {
+                        Thread.sleep(400);
+                    } catch (Exception e) {
+                        // TODO: handle exception
+                    }
+                }
+                if ((ret = msyUsbKey.SyUpImage(fingerBuf)) != 0) {
+                    Log.e(TAG, "上传图片失败:" + ret);
+                    continue;
+                }
 
-        public void waitForDone() {
-            while (!mIsDone) {
-                try {
-                    Thread.sleep(50);
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
+                if (msyUsbKey.SySearch(fingerId) != PS_OK) {
+                    continue;
+                } else {
+                    Log.i(TAG, "匹配指纹特征:["+fingerId[0]+"]["+verifyList[fingerId[0]]+"]");
+                    callbackContext.success(verifyList[fingerId[0]]);
+                    return 0;
                 }
             }
+        }
+
+        @Override
+        protected void onPostExecute(Integer result) {
+            return;
+        }
+
+        @Override
+        protected void onPreExecute() {
+            Log.e(TAG, "Start Search, Please press finger");
+            if(msyUsbKey.SyClear() != 0) {
+                Log.w(TAG, "指纹库清空异常!");
+            }
+            int pageId = 0;
+            for (String s : verifyList) {
+                if(msyUsbKey.SyDownChar(pageId++, DataUtils.hexStringTobyte(s)) != 0) {
+                    Log.w(TAG, "指纹库初始化异常!");
+                }
+            }
+            return;
         }
     }
 }
