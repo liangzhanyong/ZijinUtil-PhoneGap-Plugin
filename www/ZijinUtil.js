@@ -69,8 +69,8 @@ ZijinUtil.prototype.setOutputPower = function (mOutPower) {
   cordova.exec(null, null, "ZijinUtil", "setOutputPower", [{mOutPower: mOutPower}]);
 };
 
-ZijinUtil.prototype.openFingerprint = function () {
-  cordova.exec(null, null, "ZijinUtil", "openFingerprint", [{}]);
+ZijinUtil.prototype.openFingerprint = function (successCallback, errorCallback) {
+  cordova.exec(successCallback, errorCallback, "ZijinUtil", "openFingerprint", [{}]);
 };
 
 ZijinUtil.prototype.closeFingerprint = function () {

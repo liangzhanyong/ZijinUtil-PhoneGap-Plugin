@@ -180,6 +180,7 @@ public class Plugin_U8 implements SoftDecodingAPI.IBarCodeData {
             return true;
         }
         else if(action.equals("openFingerprint")) {
+            this.callbackContext = callbackContext;
             openDevice();
         }
         else if(action.equals("closeFingerprint")) {
@@ -438,8 +439,10 @@ public class Plugin_U8 implements SoftDecodingAPI.IBarCodeData {
                     if (ret == SyOTG_Key.DEVICE_SUCCESS) {
                         Log.e(TAG, "open device success!");
                         fpOpened = true;
+                        callbackContext.success();
                     } else {
                         Toast.makeText(cordova.getContext(), "open device fail error code :" + ret, Toast.LENGTH_SHORT).show();
+                        callbackContext.error();
                     }
                 }
             }
