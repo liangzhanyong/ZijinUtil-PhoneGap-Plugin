@@ -180,11 +180,16 @@ public class Plugin_U8 implements SoftDecodingAPI.IBarCodeData {
             return true;
         }
         else if(action.equals("openFingerprint")) {
-            this.callbackContext = callbackContext;
-            openDevice();
+            cordova.getThreadPool().execute(() -> {
+                this.callbackContext = callbackContext;
+                openDevice();
+            });
+           return true;
         }
         else if(action.equals("closeFingerprint")) {
-            closeDevice();
+            cordova.getThreadPool().execute(() -> {
+                closeDevice();
+            });
         }
         else if(action.equals("verifyFingerprint")) {
             cordova.getThreadPool().execute(() -> {
