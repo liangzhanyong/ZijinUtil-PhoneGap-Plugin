@@ -184,7 +184,7 @@ public class Plugin_U8 implements SoftDecodingAPI.IBarCodeData {
                 this.callbackContext = callbackContext;
                 openDevice();
             });
-           return true;
+            return true;
         }
         else if(action.equals("closeFingerprint")) {
             cordova.getThreadPool().execute(() -> {
@@ -447,7 +447,7 @@ public class Plugin_U8 implements SoftDecodingAPI.IBarCodeData {
                         callbackContext.success();
                     } else {
                         Toast.makeText(cordova.getContext(), "open device fail error code :" + ret, Toast.LENGTH_SHORT).show();
-                        callbackContext.error();
+                        callbackContext.error("open device fail error code :" + ret);
                     }
                 }
             }
@@ -533,11 +533,11 @@ public class Plugin_U8 implements SoftDecodingAPI.IBarCodeData {
                 }
 
                 // 两次采集指纹间隔
-                try {
-                    Thread.sleep(200);
-                } catch (Exception e) {
-                    Log.i(TAG, e.toString());
-                }
+//                try {
+//                    Thread.sleep(200);
+//                } catch (Exception e) {
+//                    Log.i(TAG, e.toString());
+//                }
 
                 while (msyUsbKey.SyGetImage() == PS_NO_FINGER) {
                     if (fpOpened == false) {
@@ -612,19 +612,8 @@ public class Plugin_U8 implements SoftDecodingAPI.IBarCodeData {
                     }
 
                     try {
-                        Thread.sleep(400);
-                    } catch (Exception e) {
-                        // TODO: handle exception
-                    }
-                    try {
-                        Thread.sleep(400);
-                    } catch (Exception e) {
-                        // TODO: handle exception
-                    }
-                }
-                if ((ret = msyUsbKey.SyUpImage(fingerBuf)) != 0) {
-                    Log.e(TAG, "上传图片失败:" + ret);
-                    continue;
+                        Thread.sleep(200);
+                    } catch (Exception e) { }
                 }
 
                 if (msyUsbKey.SySearch(fingerId) != PS_OK) {
