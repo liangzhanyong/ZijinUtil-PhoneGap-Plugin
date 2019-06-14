@@ -4,7 +4,6 @@ import android.hardware.usb.UsbDevice;
 import android.hardware.usb.UsbManager;
 import android.os.AsyncTask;
 import android.util.Log;
-import android.widget.Toast;
 
 import com.cw.barcodesdk.SoftDecodingAPI;
 import com.cw.fpjrasdk.USBFingerManager;
@@ -27,6 +26,8 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.util.Date;
+
 public class Plugin_U8 implements SoftDecodingAPI.IBarCodeData {
     private static final String TAG = "Plugin_U8";
     private static int IMAGE_X = 256;
@@ -43,7 +44,6 @@ public class Plugin_U8 implements SoftDecodingAPI.IBarCodeData {
     private static final int PS_NO_FINGER = 0x02;
     private static final int PS_OK = 0x00;
     private static int fingerCnt = 1;
-    byte[] fingerBuf = new byte[IMAGE_X * IMAGE_Y];
     byte[] g_TempData = new byte[512];
     String[] verifyList = {};
 
@@ -446,7 +446,6 @@ public class Plugin_U8 implements SoftDecodingAPI.IBarCodeData {
                         fpOpened = true;
                         callbackContext.success();
                     } else {
-                        Toast.makeText(cordova.getContext(), "open device fail error code :" + ret, Toast.LENGTH_SHORT).show();
                         callbackContext.error("open device fail error code :" + ret);
                     }
                 }
@@ -454,7 +453,7 @@ public class Plugin_U8 implements SoftDecodingAPI.IBarCodeData {
 
             @Override
             public void onOpenUSBFingerFailure(String s) {
-                Toast.makeText(cordova.getContext(), s, Toast.LENGTH_SHORT).show();
+                callbackContext.error(s);
             }
         });
     }
@@ -471,7 +470,7 @@ public class Plugin_U8 implements SoftDecodingAPI.IBarCodeData {
             fpOpened = false;
             USBFingerManager.getInstance(cordova.getContext()).closeUSB();
         } catch (Exception e) {
-            Toast.makeText(cordova.getContext(), "Exception: => " + e.toString(), Toast.LENGTH_SHORT).show();
+            Log.i(TAG, "Exception: => " + e.toString());
         }
     }
 
@@ -634,8 +633,10 @@ public class Plugin_U8 implements SoftDecodingAPI.IBarCodeData {
         @Override
         protected void onPreExecute() {
             Log.e(TAG, "Start Search, Please press finger");
-            if(msyUsbKey.SyClear() != 0) {
+            if(msyUsbKey != null && msyUsbKey.SyClear() != 0) {
                 Log.w(TAG, "指纹库清空异常!");
+                callbackContext.error("指纹库初始化异常");
+                return;
             }
             int pageId = 0;
             for (String s : verifyList) {
