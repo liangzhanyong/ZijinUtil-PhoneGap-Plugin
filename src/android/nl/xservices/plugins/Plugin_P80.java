@@ -4,11 +4,15 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.os.AsyncTask;
+import android.text.TextUtils;
 import android.util.Log;
+import android.widget.Toast;
 
 import com.barcode.BarcodeUtility;
 import com.cw.r2000uhfsdk.helper.InventoryBuffer;
 import com.google.gson.Gson;
+import com.rscja.deviceapi.Fingerprint;
 import com.rscja.deviceapi.RFIDWithUHF;
 
 import org.apache.cordova.CallbackContext;
@@ -22,6 +26,8 @@ import java.util.Timer;
 import java.util.TimerTask;
 
 public class Plugin_P80 {
+    private static final String TAG = "Plugin_P80";
+
     private CordovaInterface cordova;
     private BarcodeUtility barcodeUtility;
     private RFIDWithUHF rfidWithUHF;
@@ -32,17 +38,24 @@ public class Plugin_P80 {
     private boolean inventoryLoop = false;
     private InventoryBuffer inventoryResult = new InventoryBuffer();
 
+    private String[] verifyList = {};
+    public Fingerprint mFingerprint;
+
     public Plugin_P80(CordovaInterface cordova, BarcodeUtility barcodeUtility, RFIDWithUHF rfidWithUHF) {
         this.cordova = cordova;
         this.barcodeUtility = barcodeUtility;
         this.rfidWithUHF = rfidWithUHF;
+        try {
+            mFingerprint = Fingerprint.getInstance();
+        } catch (Exception ex) {
+            Toast.makeText(cordova.getContext(), ex.getMessage(), Toast.LENGTH_SHORT).show();
+            return;
+        }
     }
 
     public boolean execute(String action, JSONArray args, CallbackContext callbackContext) throws JSONException {
         if (action.equals("openUHF")) {
-            cordova.getActivity().runOnUiThread(() -> {
-                rfidWithUHF.init();
-            });
+            cordova.getThreadPool().execute(() -> rfidWithUHF.init());
             return true;
         }
         else if(action.equals("startInventoryReal")) {
@@ -148,9 +161,52 @@ public class Plugin_P80 {
             return true;
         }
         else if(action.equals("setOutputPower")) {
-            JSONObject params = args.getJSONObject(0);
-            Integer power = params.getInt("mOutPower");
-            rfidWithUHF.setPower(power);
+            cordova.getThreadPool().execute(() -> {
+                Integer power;
+                try {
+                    JSONObject params = args.getJSONObject(0);
+                    power = params.getInt("mOutPower");
+                    rfidWithUHF.setPower(power);
+                } catch (JSONException e) {
+                    e.printStackTrace();
+                }
+            });
+            return true;
+        }
+        else if(action.equals("openFingerprint")) {
+            cordova.getThreadPool().execute(() -> {
+                if(mFingerprint != null && mFingerprint.init()) {
+                    callbackContext.success();
+                } else {
+                    callbackContext.error("指纹仪启动失败!");
+                }
+            });
+            return true;
+        }
+        else if(action.equals("closeFingerprint")) {
+            cordova.getThreadPool().execute(() -> freeFingerprint());
+            return true;
+        }
+        else if(action.equals("verifyFingerprint")) {
+            cordova.getThreadPool().execute(() -> {
+                JSONObject params;
+                try {
+                    params = args.getJSONObject(0);
+                    verifyList = params.getString("chars").split("\\$");
+                } catch (JSONException e) {
+                    e.printStackTrace();
+                }
+                this.callback = callbackContext;
+                IdentTask asyncTask_search = new IdentTask();
+                asyncTask_search.execute(1);
+            });
+            return true;
+        }
+        else if(action.equals("scanFingerprint")) {
+            cordova.getThreadPool().execute(() -> {
+                this.callback = callbackContext;
+                new AcqTask().execute(1);
+            });
             return true;
         }
         return true;
@@ -337,6 +393,12 @@ public class Plugin_P80 {
         rfidWithUHF.lockMem(btAryPassWord, btMemBank, btLockType);
     }
 
+    public void freeFingerprint() {
+        if (mFingerprint != null) {
+            mFingerprint.free();
+        }
+    }
+
     private void barCodeHandle() {
         if (timer != null) {
             timer.cancel();
@@ -347,7 +409,7 @@ public class Plugin_P80 {
                 if (continueScanner) {
 //                    barcodeUtility.stopScan(cordova.getContext(), BarcodeUtility.ModuleType.AUTOMATIC_ADAPTATION);
                     barcodeUtility.startScan(cordova.getContext(), BarcodeUtility.ModuleType.AUTOMATIC_ADAPTATION);
-                    Log.i("Plugin_P80", "continue scan");
+                    Log.i(TAG, "continue scan");
                     barCodeHandle();
                 }
             }
@@ -360,7 +422,7 @@ public class Plugin_P80 {
 
         @Override
         public void onReceive(Context context, Intent intent) {
-            Log.i("BarCodeReceiver", intent.getAction());
+            Log.i(TAG, "BarCodeReceiver" + intent.getAction());
             String barCode = intent.getStringExtra("data");
             if (barCode != null && !barCode.equals("")) {
                 barCode = barCode.replaceAll("\r|\n", "");
@@ -398,7 +460,7 @@ public class Plugin_P80 {
                         }
                     }
                     if (!hasEPC) {
-                        Log.i("data","EPC:"+strEPC);
+                        Log.i(TAG,"EPC data:"+strEPC);
                         InventoryBuffer.InventoryTagMap inventoryTagMap = new InventoryBuffer.InventoryTagMap();
                         inventoryTagMap.strEPC = strEPC;
                         inventoryResult.lsTagList.add(inventoryTagMap);
@@ -408,8 +470,141 @@ public class Plugin_P80 {
                     }
                 }
             }
-            Log.i("inventoryResult", "clear");
+            Log.i(TAG, "inventoryResult clear");
             inventoryResult = new InventoryBuffer();
         }
     }
+
+    class AcqTask extends AsyncTask<Integer, Integer, String> {
+
+        String data;
+
+        public AcqTask() { }
+
+        @Override
+        protected String doInBackground(Integer... params) {
+
+            boolean exeSucc = false;
+
+            // 采集指纹
+            while (!mFingerprint.getImage()) {
+                Log.i(TAG, "请按下指纹");
+                try {
+                    Thread.sleep(200);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
+
+            // 生成特征值到B1
+            if (mFingerprint.genChar(Fingerprint.BufferEnum.B1)) {
+                exeSucc = true;
+            }
+
+            // 再次采集指纹
+            while (!mFingerprint.getImage()) {
+                Log.i(TAG, "请按下指纹");
+                try {
+                    Thread.sleep(200);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
+
+            // 生成特征值到B2
+            if (mFingerprint.genChar(Fingerprint.BufferEnum.B2)) {
+                exeSucc = true;
+            }
+
+            // 合并两个缓冲区到B1
+            if (mFingerprint.regModel()) {
+                exeSucc = true;
+            }
+
+            if (exeSucc) {
+//                if (mFingerprint.storChar(Fingerprint.BufferEnum.B1, 1)) {
+                    data = mFingerprint.upChar(Fingerprint.BufferEnum.B1);
+                    Log.i(TAG, "采集特征值:"+data);
+                    return "ok";
+//                }
+            }
+            return null;
+        }
+
+        @Override
+        protected void onPostExecute(String result) {
+            super.onPostExecute(result);
+
+            if (TextUtils.isEmpty(result)) {
+                callback.error("指纹采集失败!");
+                return;
+            }
+            callback.success(data);
+        }
+
+        @Override
+        protected void onPreExecute() {
+            super.onPreExecute();
+        }
+
+        @Override
+        protected void onProgressUpdate(Integer... values) {
+            super.onProgressUpdate(values);
+        }
+
+    }
+
+    class IdentTask extends AsyncTask<Integer, Integer, String> {
+
+        public IdentTask() { }
+
+        @Override
+        protected String doInBackground(Integer... params) {
+
+            while (!mFingerprint.getImage()) {
+                Log.i(TAG, "请按下指纹");
+                try {
+                    Thread.sleep(200);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
+
+            if (mFingerprint.genChar(Fingerprint.BufferEnum.B1)) {
+                int[] result;
+                int exeCount = 0;
+
+                do {
+                    exeCount++;
+                    result = mFingerprint
+                            .search(Fingerprint.BufferEnum.B1, 0, 1000);
+
+                } while (result == null && exeCount < 3);
+
+                Log.i(TAG, "exeCount=" + exeCount);
+
+                if (result != null) {
+                    Log.i(TAG, "匹配特征值ID："+result[0]);
+                    callback.success(verifyList[result[0]]);
+                } else {
+                    callback.error("比对失败");
+                    Log.i(TAG, "search result Empty");
+                }
+                return null;
+            }
+            callback.error("比对失败");
+            return null;
+        }
+
+        @Override
+        protected void onPreExecute() {
+            super.onPreExecute();
+            mFingerprint.deletChar(0, 1000);
+            for (int i = 0; i < verifyList.length; i++) {
+                mFingerprint.downChar(Fingerprint.BufferEnum.B1, verifyList[i]);
+                mFingerprint.storChar(Fingerprint.BufferEnum.B1, i);
+            }
+        }
+    }
+
 }

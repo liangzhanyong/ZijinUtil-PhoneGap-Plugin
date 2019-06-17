@@ -26,12 +26,8 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import java.util.Date;
-
 public class Plugin_U8 implements SoftDecodingAPI.IBarCodeData {
     private static final String TAG = "Plugin_U8";
-    private static int IMAGE_X = 256;
-    private static int IMAGE_Y = 288;
 
     private CallbackContext callbackContext;
     public R2000UHFAPI r2000UHFAPI;
@@ -434,6 +430,7 @@ public class Plugin_U8 implements SoftDecodingAPI.IBarCodeData {
     }
 
     private void openDevice() {
+        if (fpOpened) return;
         USBFingerManager.getInstance(cordova.getContext()).openUSB(new USBFingerManager.OnUSBFingerListener() {
             @Override
             public void onOpenUSBFingerSuccess(String s, UsbManager usbManager, UsbDevice usbDevice) {
@@ -494,7 +491,7 @@ public class Plugin_U8 implements SoftDecodingAPI.IBarCodeData {
         } else {
             status = PluginResult.Status.OK;
         }
-        String result = s.replaceAll("\r|\n", "");
+        String result = s.replaceAll("\r|\n", "").trim();
         if (result.length() == 4 && (result.startsWith("C") || result.startsWith("S"))) {
             result = "00000" + result.substring(1);
         }
@@ -531,13 +528,6 @@ public class Plugin_U8 implements SoftDecodingAPI.IBarCodeData {
                     return -1;
                 }
 
-                // 两次采集指纹间隔
-//                try {
-//                    Thread.sleep(200);
-//                } catch (Exception e) {
-//                    Log.i(TAG, e.toString());
-//                }
-
                 while (msyUsbKey.SyGetImage() == PS_NO_FINGER) {
                     if (fpOpened == false) {
                         Log.e(TAG, "设备未打开!");
@@ -549,7 +539,7 @@ public class Plugin_U8 implements SoftDecodingAPI.IBarCodeData {
                     } catch (Exception e) {
                     }
                 }
-
+                Log.i(TAG, "-----开始采集-----");
                 if ((ret = msyUsbKey.SyEnroll(cnt, fingerCnt)) != PS_OK) {
                     Log.e(TAG, "Sy Enroll:" + ret);
                     callbackContext.error("Sy Enroll:" + ret);
@@ -606,15 +596,11 @@ public class Plugin_U8 implements SoftDecodingAPI.IBarCodeData {
                     return -1;
                 }
                 while (msyUsbKey.SyGetImage() == PS_NO_FINGER) {
-                    if (fpOpened == false) {
-                        return -1;
-                    }
-
                     try {
-                        Thread.sleep(200);
+                        Thread.sleep(400);
                     } catch (Exception e) { }
                 }
-
+                Log.i(TAG, "-----开始比对-----");
                 if (msyUsbKey.SySearch(fingerId) != PS_OK) {
                     continue;
                 } else {

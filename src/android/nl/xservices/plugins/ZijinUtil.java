@@ -50,7 +50,6 @@ public class ZijinUtil extends CordovaPlugin {
                 barcodeUtility.setScanFailureBroadcast(cordova.getContext(), false);
                 barcodeUtility.setContinuousScanIntervalTime(cordova.getContext(), 100);
                 barcodeUtility.setContinuousScanTimeOut(cordova.getContext(), 3 * 60);
-                rfidWithUHF.init();
                 plugin_p80 = new Plugin_P80(cordova, barcodeUtility, rfidWithUHF);
             });
         } else if (DEVTYPE_U8.equals(Build.MODEL)) {
@@ -68,9 +67,9 @@ public class ZijinUtil extends CordovaPlugin {
 
     @Override
     public boolean execute(String action, JSONArray args, CallbackContext callbackContext) throws JSONException {
-        if (DEVTYPE_P80.equals(Build.MODEL)) {
+        if (DEVTYPE_P80.equals(Build.MODEL) && plugin_p80 != null) {
             return plugin_p80.execute(action, args, callbackContext);
-        } else if (DEVTYPE_U8.equals(Build.MODEL)) {
+        } else if (DEVTYPE_U8.equals(Build.MODEL) && plugin_u8 != null) {
             return plugin_u8.execute(action, args, callbackContext);
         } else {
             return false;
@@ -99,6 +98,7 @@ public class ZijinUtil extends CordovaPlugin {
             if (barcodeUtility != null) {
                 barcodeUtility.stopScan(cordova.getContext(), BarcodeUtility.ModuleType.AUTOMATIC_ADAPTATION);
             }
+            plugin_p80.freeFingerprint();
         } else if (DEVTYPE_U8.equals(Build.MODEL)) {
             if(plugin_u8.r2000UHFAPI.getReaderHelper() != null && !!plugin_u8.r2000UHFAPI.getReaderHelper().getInventoryFlag()) {
                 plugin_u8.r2000UHFAPI.stopInventoryReal();
