@@ -3,7 +3,9 @@ package nl.xservices.plugins;
 import android.hardware.usb.UsbDevice;
 import android.hardware.usb.UsbManager;
 import android.os.AsyncTask;
+import android.os.Looper;
 import android.util.Log;
+import android.widget.Toast;
 
 import com.cw.barcodesdk.SoftDecodingAPI;
 import com.cw.fpjrasdk.USBFingerManager;
@@ -430,7 +432,10 @@ public class Plugin_U8 implements SoftDecodingAPI.IBarCodeData {
     }
 
     private void openDevice() {
-        if (fpOpened) return;
+        if (fpOpened) {
+            callbackContext.success();
+            return;
+        }
         USBFingerManager.getInstance(cordova.getContext()).openUSB(new USBFingerManager.OnUSBFingerListener() {
             @Override
             public void onOpenUSBFingerSuccess(String s, UsbManager usbManager, UsbDevice usbDevice) {
@@ -518,31 +523,39 @@ public class Plugin_U8 implements SoftDecodingAPI.IBarCodeData {
      * 采集指纹
      */
     private class ImputAsyncTask extends AsyncTask<Integer, String, Integer> {
-
+        Toast toast;
         @Override
         protected Integer doInBackground(Integer... params) {
             int cnt = 1;
             int ret;
             while (true) {
                 if (fpOpened == false) {
+                    Log.e(TAG, "设备未打开!");
                     return -1;
                 }
-
-                while (msyUsbKey.SyGetImage() == PS_NO_FINGER) {
-                    if (fpOpened == false) {
-                        Log.e(TAG, "设备未打开!");
-                        return -1;
-                    }
-
+                while (msyUsbKey.SyGetImage() != PS_NO_FINGER) {
+                    Log.e(TAG, "两次采集指纹间隔");
                     try {
                         Thread.sleep(200);
                     } catch (Exception e) {
+                        Log.i(TAG, e.toString());
+                    }
+                    publishProgress("请离开手指!");
+                }
+                while (msyUsbKey.SyGetImage() == PS_NO_FINGER) {
+                    try {
+                        Thread.sleep(200);
+                    } catch (Exception e) {
+                    }
+                    if (cnt == 1) {
+                        publishProgress("请按压手指!");
+                    } else {
+                        publishProgress("请再次按压手指!");
                     }
                 }
                 Log.i(TAG, "-----开始采集-----");
                 if ((ret = msyUsbKey.SyEnroll(cnt, fingerCnt)) != PS_OK) {
                     Log.e(TAG, "Sy Enroll:" + ret);
-                    callbackContext.error("Sy Enroll:" + ret);
                     return -1;
                 }
 
@@ -559,6 +572,16 @@ public class Plugin_U8 implements SoftDecodingAPI.IBarCodeData {
         }
 
         @Override
+        protected void onProgressUpdate(String... values) {
+            super.onProgressUpdate(values);
+            if (toast != null){
+                toast.cancel();
+            }
+            toast = Toast.makeText(cordova.getContext(), values[0], Toast.LENGTH_SHORT);
+            toast.show();
+        }
+
+        @Override
         protected void onPostExecute(Integer result) {
             if (0 == result) {
                 if (fingerCnt > 256) {
@@ -570,6 +593,7 @@ public class Plugin_U8 implements SoftDecodingAPI.IBarCodeData {
                 return;
             } else {
                 Log.i(TAG, "Enroll Error " + result);
+                callbackContext.error("Sy Enroll:" + result);
                 return;
             }
         }
@@ -585,9 +609,7 @@ public class Plugin_U8 implements SoftDecodingAPI.IBarCodeData {
      * 搜索指纹
      */
     private class SearchAsyncTask extends AsyncTask<Integer, String, Integer> {
-        @SuppressWarnings("unused")
-        private int ret;
-
+        int exeCount = 0;
         @Override
         protected Integer doInBackground(Integer... params) {
             int[] fingerId = new int[1];
@@ -602,17 +624,23 @@ public class Plugin_U8 implements SoftDecodingAPI.IBarCodeData {
                 }
                 Log.i(TAG, "-----开始比对-----");
                 if (msyUsbKey.SySearch(fingerId) != PS_OK) {
+                    exeCount++;
                     continue;
-                } else {
-                    Log.i(TAG, "匹配指纹特征:["+fingerId[0]+"]["+verifyList[fingerId[0]]+"]");
-                    callbackContext.success(verifyList[fingerId[0]]);
-                    return 0;
                 }
+                if (exeCount > 3) {
+                    return -1;
+                }
+                Log.i(TAG, "匹配指纹特征:["+fingerId[0]+"]["+verifyList[fingerId[0]]+"]");
+                callbackContext.success(verifyList[fingerId[0]]);
+                return 0;
             }
         }
 
         @Override
         protected void onPostExecute(Integer result) {
+            if(result != 0) {
+                callbackContext.error("比对失败");
+            }
             return;
         }
 

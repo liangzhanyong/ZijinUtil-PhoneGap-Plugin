@@ -98,7 +98,7 @@ public class ZijinUtil extends CordovaPlugin {
             if (barcodeUtility != null) {
                 barcodeUtility.stopScan(cordova.getContext(), BarcodeUtility.ModuleType.AUTOMATIC_ADAPTATION);
             }
-            plugin_p80.freeFingerprint();
+//            plugin_p80.freeFingerprint();
         } else if (DEVTYPE_U8.equals(Build.MODEL)) {
             if(plugin_u8.r2000UHFAPI.getReaderHelper() != null && !!plugin_u8.r2000UHFAPI.getReaderHelper().getInventoryFlag()) {
                 plugin_u8.r2000UHFAPI.stopInventoryReal();
@@ -117,7 +117,7 @@ public class ZijinUtil extends CordovaPlugin {
                 barcodeUtility.stopScan(cordova.getContext(), BarcodeUtility.ModuleType.AUTOMATIC_ADAPTATION);
                 barcodeUtility.close(cordova.getContext(), BarcodeUtility.ModuleType.AUTOMATIC_ADAPTATION);
             }
-
+            plugin_p80.freeFingerprint();
         } else if (DEVTYPE_U8.equals(Build.MODEL)) {
             plugin_u8.onDestroy();
         }

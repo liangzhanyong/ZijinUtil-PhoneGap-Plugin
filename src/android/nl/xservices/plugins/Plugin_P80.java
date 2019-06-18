@@ -40,6 +40,7 @@ public class Plugin_P80 {
 
     private String[] verifyList = {};
     public Fingerprint mFingerprint;
+    private boolean fpOpened = false;
 
     public Plugin_P80(CordovaInterface cordova, BarcodeUtility barcodeUtility, RFIDWithUHF rfidWithUHF) {
         this.cordova = cordova;
@@ -175,7 +176,8 @@ public class Plugin_P80 {
         }
         else if(action.equals("openFingerprint")) {
             cordova.getThreadPool().execute(() -> {
-                if(mFingerprint != null && mFingerprint.init()) {
+                if(fpOpened || (mFingerprint != null && mFingerprint.init())) {
+                    fpOpened = true;
                     callbackContext.success();
                 } else {
                     callbackContext.error("指纹仪启动失败!");
@@ -397,6 +399,7 @@ public class Plugin_P80 {
         if (mFingerprint != null) {
             mFingerprint.free();
         }
+        fpOpened = false;
     }
 
     private void barCodeHandle() {
@@ -485,7 +488,9 @@ public class Plugin_P80 {
         protected String doInBackground(Integer... params) {
 
             boolean exeSucc = false;
-
+            if(!fpOpened) {
+                return null;
+            }
             // 采集指纹
             while (!mFingerprint.getImage()) {
                 Log.i(TAG, "请按下指纹");
@@ -555,13 +560,15 @@ public class Plugin_P80 {
     }
 
     class IdentTask extends AsyncTask<Integer, Integer, String> {
-
+        String data;
         public IdentTask() { }
 
         @Override
         protected String doInBackground(Integer... params) {
-
-            while (!mFingerprint.getImage()) {
+            if(!fpOpened) {
+                return null;
+            }
+            while (mFingerprint.isPowerOn() && !mFingerprint.getImage()) {
                 Log.i(TAG, "请按下指纹");
                 try {
                     Thread.sleep(200);
@@ -585,21 +592,32 @@ public class Plugin_P80 {
 
                 if (result != null) {
                     Log.i(TAG, "匹配特征值ID："+result[0]);
-                    callback.success(verifyList[result[0]]);
+                    data = verifyList[result[0]];
+                    return "ok";
                 } else {
-                    callback.error("比对失败");
                     Log.i(TAG, "search result Empty");
+                    return null;
                 }
-                return null;
             }
-            callback.error("比对失败");
             return null;
+        }
+
+        @Override
+        protected void onPostExecute(String s) {
+            super.onPostExecute(s);
+
+            if (TextUtils.isEmpty(s)) {
+                callback.error("比对失败");
+                return;
+            }
+            callback.success(data);
         }
 
         @Override
         protected void onPreExecute() {
             super.onPreExecute();
-            mFingerprint.deletChar(0, 1000);
+            mFingerprint.empty();
+            // verifyList为从服务端获取的一组指纹特征
             for (int i = 0; i < verifyList.length; i++) {
                 mFingerprint.downChar(Fingerprint.BufferEnum.B1, verifyList[i]);
                 mFingerprint.storChar(Fingerprint.BufferEnum.B1, i);
