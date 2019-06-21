@@ -607,7 +607,7 @@ public class Plugin_P80 {
             super.onPostExecute(s);
 
             if (TextUtils.isEmpty(s)) {
-                callback.error("比对失败");
+                callback.error("比对失败!");
                 return;
             }
             callback.success(data);

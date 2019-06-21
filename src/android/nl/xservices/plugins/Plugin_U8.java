@@ -3,7 +3,6 @@ package nl.xservices.plugins;
 import android.hardware.usb.UsbDevice;
 import android.hardware.usb.UsbManager;
 import android.os.AsyncTask;
-import android.os.Looper;
 import android.util.Log;
 import android.widget.Toast;
 
@@ -201,6 +200,31 @@ public class Plugin_U8 implements SoftDecodingAPI.IBarCodeData {
                 this.callbackContext = callbackContext;
                 SearchAsyncTask asyncTask_search = new SearchAsyncTask();
                 asyncTask_search.execute(1);
+            });
+            return true;
+        }
+        else if(action.equals("loadFpData")) {
+            cordova.getThreadPool().execute(() -> {
+                JSONObject params;
+                try {
+                    params = args.getJSONObject(0);
+                    verifyList = params.getString("chars").split("\\$");
+                    if(msyUsbKey != null && msyUsbKey.SyClear() != 0) {
+                        Log.w(TAG, "指纹库清空异常!");
+                        callbackContext.error("指纹库初始化异常");
+                        return;
+                    }
+                    int pageId = 0;
+                    for (String s : verifyList) {
+                        if(msyUsbKey.SyDownChar(pageId++, DataUtils.hexStringTobyte(s)) != 0) {
+                            Log.w(TAG, "指纹库初始化异常!");
+                        }
+                    }
+                    callbackContext.success();
+                } catch (JSONException e) {
+                    e.printStackTrace();
+                    callbackContext.error("指纹库初始化异常");
+                }
             });
             return true;
         }
@@ -613,23 +637,28 @@ public class Plugin_U8 implements SoftDecodingAPI.IBarCodeData {
         @Override
         protected Integer doInBackground(Integer... params) {
             int[] fingerId = new int[1];
+            int group = verifyList.length / 10;
+            int currentGroup = 1;
             while (true) {
-                if (fpOpened == false) {
+                if (fpOpened == false || exeCount > 2 * group) {
                     return -1;
                 }
                 while (msyUsbKey.SyGetImage() == PS_NO_FINGER) {
                     try {
-                        Thread.sleep(400);
+                        Thread.sleep(200);
                     } catch (Exception e) { }
                 }
-                Log.i(TAG, "-----开始比对-----");
                 if (msyUsbKey.SySearch(fingerId) != PS_OK) {
                     exeCount++;
+                    if (exeCount > 2 * currentGroup) {
+                        for(int i = 0; i < 10; i++) {
+                            msyUsbKey.SyDeletChar(currentGroup + i - 1);
+                        }
+                        currentGroup++;
+                    }
                     continue;
                 }
-                if (exeCount > 3) {
-                    return -1;
-                }
+
                 Log.i(TAG, "匹配指纹特征:["+fingerId[0]+"]["+verifyList[fingerId[0]]+"]");
                 callbackContext.success(verifyList[fingerId[0]]);
                 return 0;

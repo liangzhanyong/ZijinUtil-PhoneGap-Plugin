@@ -85,6 +85,10 @@ ZijinUtil.prototype.verifyFingerprint = function (charArray, successCallback, er
   cordova.exec(successCallback, errorCallback, "ZijinUtil", "verifyFingerprint", [{chars: charArray.join('$')}]);
 };
 
+ZijinUtil.prototype.loadFpData = function (charArray, successCallback, errorCallback) {
+  cordova.exec(successCallback, errorCallback, "ZijinUtil", "loadFpData", [{chars: charArray.join('$')}]);
+};
+
 ZijinUtil.install = function () {
   if (!window.plugins) {
     window.plugins = {};
