@@ -50,6 +50,7 @@ public class Plugin_U8 implements SoftDecodingAPI.IBarCodeData {
         this.cordova = cordova;
         this.r2000UHFAPI = R2000UHFAPI.getInstance();
         this.softDecodingAPI = new SoftDecodingAPI(cordova.getContext(), this);
+        this.softDecodingAPI.openBarCodeReceiver();
         USBFingerManager.getInstance(cordova.getContext()).setDelayMs(500);
     }
 
@@ -487,7 +488,7 @@ public class Plugin_U8 implements SoftDecodingAPI.IBarCodeData {
     /**
      * 关闭指纹设备
      */
-    private void closeDevice() {
+    public void closeDevice() {
         try {
             if (msyUsbKey != null) {
                 msyUsbKey.SyClose();

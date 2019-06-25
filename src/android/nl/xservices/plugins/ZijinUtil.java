@@ -98,7 +98,6 @@ public class ZijinUtil extends CordovaPlugin {
             if (barcodeUtility != null) {
                 barcodeUtility.stopScan(cordova.getContext(), BarcodeUtility.ModuleType.AUTOMATIC_ADAPTATION);
             }
-//            plugin_p80.freeFingerprint();
         } else if (DEVTYPE_U8.equals(Build.MODEL)) {
             if(plugin_u8.r2000UHFAPI.getReaderHelper() != null && !!plugin_u8.r2000UHFAPI.getReaderHelper().getInventoryFlag()) {
                 plugin_u8.r2000UHFAPI.stopInventoryReal();
@@ -106,6 +105,14 @@ public class ZijinUtil extends CordovaPlugin {
             plugin_u8.softDecodingAPI.CloseScanning();
             //建议在onPause里或者监听屏幕息屏里放，息屏后可以省电
             plugin_u8.softDecodingAPI.closeBarCodeReceiver();
+        }
+    }
+
+    @Override
+    public void onStop() {
+        super.onStop();
+        if(DEVTYPE_U8.equals(Build.MODEL)) {
+            plugin_u8.closeDevice();
         }
     }
 
