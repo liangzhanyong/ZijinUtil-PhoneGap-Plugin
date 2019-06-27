@@ -79,11 +79,17 @@ public class Plugin_U8 implements SoftDecodingAPI.IBarCodeData {
             return true;
         }
         else if(action.equals("scan")) {
-            cordova.getThreadPool().execute(() -> barCodeScanner(callbackContext));
+            cordova.getThreadPool().execute(() -> {
+                softDecodingAPI.openBarCodeReceiver();
+                barCodeScanner(callbackContext);
+            });
             return true;
         }
         else if(action.equals("continueScanning")) {
-            cordova.getThreadPool().execute(() -> continueScanning(callbackContext));
+            cordova.getThreadPool().execute(() -> {
+                softDecodingAPI.openBarCodeReceiver();
+                continueScanning(callbackContext);
+            });
             PluginResult pr = new PluginResult(PluginResult.Status.NO_RESULT);
             pr.setKeepCallback(true);
             callbackContext.sendPluginResult(pr);
@@ -93,6 +99,7 @@ public class Plugin_U8 implements SoftDecodingAPI.IBarCodeData {
             cordova.getThreadPool().execute(() -> {
                 this.isScanning = false;
                 softDecodingAPI.CloseScanning();
+                softDecodingAPI.closeBarCodeReceiver();
             });
             return true;
         }
@@ -515,7 +522,7 @@ public class Plugin_U8 implements SoftDecodingAPI.IBarCodeData {
     public void onBarCodeData(String s) {
         LOG.i("onBarCodeData", s);
         PluginResult.Status status;
-        if(s.isEmpty() || s.contains("No decoded message available.")) {
+        if(s == null || s.isEmpty() || s.equals("null") || s.contains("No decoded message available.")) {
 //                    status = PluginResult.Status.ERROR;
             return;
         } else {
