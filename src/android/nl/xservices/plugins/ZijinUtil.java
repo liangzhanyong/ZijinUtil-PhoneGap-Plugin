@@ -15,6 +15,7 @@ import org.json.JSONArray;
 import org.json.JSONException;
 
 import com.barcode.BarcodeUtility;
+import com.cw.fpjrasdk.USBFingerManager;
 import com.rscja.deviceapi.RFIDWithUHF;
 import com.rscja.deviceapi.exception.ConfigurationException;
 
@@ -112,7 +113,12 @@ public class ZijinUtil extends CordovaPlugin {
     public void onStop() {
         super.onStop();
         if(DEVTYPE_U8.equals(Build.MODEL)) {
-            plugin_u8.closeDevice();
+            try {
+                if (plugin_u8.jraApi != null) {
+                    plugin_u8.jraApi.closeJRA();
+                }
+                USBFingerManager.getInstance(cordova.getContext()).closeUSB();
+            } catch (Exception e) {}
         }
     }
 

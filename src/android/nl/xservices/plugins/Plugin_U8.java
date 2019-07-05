@@ -1,5 +1,6 @@
 package nl.xservices.plugins;
 
+import android.annotation.SuppressLint;
 import android.hardware.usb.UsbDevice;
 import android.hardware.usb.UsbManager;
 import android.os.AsyncTask;
@@ -7,6 +8,7 @@ import android.util.Log;
 import android.widget.Toast;
 
 import com.cw.barcodesdk.SoftDecodingAPI;
+import com.cw.fpjrasdk.JRA_API;
 import com.cw.fpjrasdk.USBFingerManager;
 import com.cw.r2000uhfsdk.IOnCommonReceiver;
 import com.cw.r2000uhfsdk.IOnInventoryRealReceiver;
@@ -17,7 +19,6 @@ import com.cw.r2000uhfsdk.helper.InventoryBuffer;
 import com.cw.r2000uhfsdk.helper.OperateTagBuffer;
 import com.cw.serialportsdk.utils.DataUtils;
 import com.google.gson.Gson;
-import com.synochip.sdk.ukey.SyOTG_Key;
 
 import org.apache.cordova.CallbackContext;
 import org.apache.cordova.CordovaInterface;
@@ -26,6 +27,10 @@ import org.apache.cordova.PluginResult;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
+
+import java.util.HashMap;
+
+import static com.cw.fpjrasdk.syno_usb.OTG_KEY.PS_OK;
 
 public class Plugin_U8 implements SoftDecodingAPI.IBarCodeData {
     private static final String TAG = "Plugin_U8";
@@ -36,13 +41,10 @@ public class Plugin_U8 implements SoftDecodingAPI.IBarCodeData {
     public SoftDecodingAPI softDecodingAPI;
     public boolean isScanning = false;
 
-    private SyOTG_Key msyUsbKey;
-    private boolean fpOpened = false;
-    private static final int PS_NO_FINGER = 0x02;
-    private static final int PS_OK = 0x00;
+    public JRA_API jraApi;
+    public boolean fpOpened = false;
     private static int fingerCnt = 1;
-    byte[] g_TempData = new byte[512];
-    String[] verifyList = {};
+    private HashMap<Integer, String> fingerMap;
 
     CordovaInterface cordova;
 
@@ -198,13 +200,6 @@ public class Plugin_U8 implements SoftDecodingAPI.IBarCodeData {
         }
         else if(action.equals("verifyFingerprint")) {
             cordova.getThreadPool().execute(() -> {
-                JSONObject params;
-                try {
-                    params = args.getJSONObject(0);
-                    verifyList = params.getString("chars").split("\\$");
-                } catch (JSONException e) {
-                    e.printStackTrace();
-                }
                 this.callbackContext = callbackContext;
                 SearchAsyncTask asyncTask_search = new SearchAsyncTask();
                 asyncTask_search.execute(1);
@@ -214,20 +209,34 @@ public class Plugin_U8 implements SoftDecodingAPI.IBarCodeData {
         else if(action.equals("loadFpData")) {
             cordova.getThreadPool().execute(() -> {
                 JSONObject params;
+                String[] verifyList;
+
                 try {
                     params = args.getJSONObject(0);
                     verifyList = params.getString("chars").split("\\$");
-                    if(msyUsbKey != null && msyUsbKey.SyClear() != 0) {
+                    if(fpOpened == false) {
+                        callbackContext.error("指纹仪未打开");
+                        return;
+                    }
+                    if(jraApi != null && jraApi.PSEmpty() != PS_OK) {
                         Log.w(TAG, "指纹库清空异常!");
                         callbackContext.error("指纹库初始化异常");
                         return;
                     }
-                    int pageId = 0;
-                    for (String s : verifyList) {
-                        if(msyUsbKey.SyDownChar(pageId++, DataUtils.hexStringTobyte(s)) != 0) {
-                            Log.w(TAG, "指纹库初始化异常!");
+                    fingerMap = new HashMap<>();
+                    Log.i(TAG, "-------导入---------");
+                    for (int i = 0; i < verifyList.length; i++) {
+                        if(verifyList[i].length() != 1024) {
+                            continue;
+                        }
+                        int[] id = new int[1];
+                        if(jraApi.PSDownCharToJRA(DataUtils.hexStringTobyte(verifyList[i]), id) != PS_OK) {
+                            Log.w(TAG, "存储模板失败!");
+                        } else {
+                            fingerMap.put(id[0], verifyList[i]);
                         }
                     }
+                    Log.i(TAG, "-------导入---------");
                     callbackContext.success();
                 } catch (JSONException e) {
                     e.printStackTrace();
@@ -463,7 +472,7 @@ public class Plugin_U8 implements SoftDecodingAPI.IBarCodeData {
         r2000UHFAPI.lockTag(btAryPassWord, btMemBank, btLockType);
     }
 
-    private void openDevice() {
+    public void openDevice() {
         if (fpOpened) {
             callbackContext.success();
             return;
@@ -472,16 +481,20 @@ public class Plugin_U8 implements SoftDecodingAPI.IBarCodeData {
             @Override
             public void onOpenUSBFingerSuccess(String s, UsbManager usbManager, UsbDevice usbDevice) {
                 if (s.equals(USBFingerManager.BYD_SMALL_DEVICE)) {
+                    Log.i(TAG, "切换USB成功");
 
-                    msyUsbKey = new SyOTG_Key(usbManager, usbDevice);
-                    int ret = msyUsbKey.SyOpen();
-                    if (ret == SyOTG_Key.DEVICE_SUCCESS) {
+                    jraApi = new JRA_API(usbManager, usbDevice);
+                    int ret = jraApi.openJRA();
+                    if (ret == JRA_API.DEVICE_SUCCESS) {
                         Log.e(TAG, "open device success!");
                         fpOpened = true;
                         callbackContext.success();
-                    } else {
-                        callbackContext.error("open device fail error code :" + ret);
+                    } else if (ret == JRA_API.PS_DEVICE_NOT_FOUND) {
+                        callbackContext.error("can't find this device!");
+                    } else if (ret == JRA_API.PS_EXCEPTION) {
+                        callbackContext.error("open device fail");
                     }
+
                 }
             }
 
@@ -497,8 +510,8 @@ public class Plugin_U8 implements SoftDecodingAPI.IBarCodeData {
      */
     public void closeDevice() {
         try {
-            if (msyUsbKey != null) {
-                msyUsbKey.SyClose();
+            if (jraApi != null) {
+                jraApi.closeJRA();
             }
             Log.e(TAG, "Device Closed");
             fpOpened = false;
@@ -554,31 +567,28 @@ public class Plugin_U8 implements SoftDecodingAPI.IBarCodeData {
     /**
      * 采集指纹
      */
+    @SuppressLint("StaticFieldLeak")
     private class ImputAsyncTask extends AsyncTask<Integer, String, Integer> {
         Toast toast;
         @Override
         protected Integer doInBackground(Integer... params) {
             int cnt = 1;
-            int ret;
             while (true) {
                 if (fpOpened == false) {
-                    Log.e(TAG, "设备未打开!");
                     return -1;
                 }
-                while (msyUsbKey.SyGetImage() != PS_NO_FINGER) {
-                    Log.e(TAG, "两次采集指纹间隔");
-                    try {
-                        Thread.sleep(200);
-                    } catch (Exception e) {
-                        Log.i(TAG, e.toString());
+                while (jraApi.PSGetImage() != JRA_API.PS_NO_FINGER) {
+                    if (fpOpened == false) {
+                        return -1;
                     }
+                    sleep(200);
                     publishProgress("请离开手指!");
                 }
-                while (msyUsbKey.SyGetImage() == PS_NO_FINGER) {
-                    try {
-                        Thread.sleep(200);
-                    } catch (Exception e) {
+                while (jraApi.PSGetImage() == JRA_API.PS_NO_FINGER) {
+                    if(fpOpened == false) {
+                        return -1;
                     }
+                    sleep(200);
                     if (cnt == 1) {
                         publishProgress("请按压手指!");
                     } else {
@@ -586,17 +596,29 @@ public class Plugin_U8 implements SoftDecodingAPI.IBarCodeData {
                     }
                 }
                 Log.i(TAG, "-----开始采集-----");
-                if ((ret = msyUsbKey.SyEnroll(cnt, fingerCnt)) != PS_OK) {
-                    Log.e(TAG, "Sy Enroll:" + ret);
-                    return -1;
-                }
-
-                if (cnt >= 2) {
-                    int i = msyUsbKey.SyUpChar(-1, g_TempData);
-                    if (i == 0) {
-                        Log.e(TAG, "特征值: " + DataUtils.bytesToHexString(g_TempData));
-                        callbackContext.success(DataUtils.bytesToHexString(g_TempData));
+                if(cnt == 1) {
+                    if(jraApi.PSGenChar(JRA_API.CHAR_BUFFER_A) != JRA_API.PS_OK) {
+                        cnt--;
                     }
+                }
+                if(cnt == 2) {
+                    if(jraApi.PSGenChar(JRA_API.CHAR_BUFFER_B) != JRA_API.PS_OK) {
+                        continue;
+                    }
+                    if(jraApi.PSRegModule() != JRA_API.PS_OK) {
+                        publishProgress("生成模板失败，请重新录入");
+                        return -1;
+                    }
+                    int[] fingerId = new int[1];
+                    byte[] g_TempData = new byte[512];
+
+                    if(jraApi.PSStoreChar(fingerId, g_TempData) != JRA_API.PS_OK) {
+                        publishProgress("存储特征失败，请重新录入");
+                        return -1;
+                    }
+                    Log.e(TAG, "特征值: " + DataUtils.bytesToHexString(g_TempData));
+                    callbackContext.success(DataUtils.bytesToHexString(g_TempData));
+                    publishProgress("OK");
                     return 0;
                 }
                 cnt++;
@@ -606,11 +628,17 @@ public class Plugin_U8 implements SoftDecodingAPI.IBarCodeData {
         @Override
         protected void onProgressUpdate(String... values) {
             super.onProgressUpdate(values);
-            if (toast != null){
+
+            if ("OK".equals(values[0])) {
+                toast.cancel();
+                return;
+            }
+            if(toast != null) {
                 toast.cancel();
             }
-            toast = Toast.makeText(cordova.getContext(), values[0], Toast.LENGTH_SHORT);
+            toast = Toast.makeText(cordova.getContext(), values[0], Toast.LENGTH_LONG);
             toast.show();
+            Log.i(TAG, values[0]);
         }
 
         @Override
@@ -645,30 +673,27 @@ public class Plugin_U8 implements SoftDecodingAPI.IBarCodeData {
         @Override
         protected Integer doInBackground(Integer... params) {
             int[] fingerId = new int[1];
-            int group = verifyList.length / 10;
-            int currentGroup = 1;
             while (true) {
-                if (fpOpened == false || exeCount > 2 * group) {
+                if (fpOpened == false || exeCount > 2) {
                     return -1;
                 }
-                while (msyUsbKey.SyGetImage() == PS_NO_FINGER) {
-                    try {
-                        Thread.sleep(200);
-                    } catch (Exception e) { }
-                }
-                if (msyUsbKey.SySearch(fingerId) != PS_OK) {
-                    exeCount++;
-                    if (exeCount > 2 * currentGroup) {
-                        for(int i = 0; i < 10; i++) {
-                            msyUsbKey.SyDeletChar(currentGroup + i - 1);
-                        }
-                        currentGroup++;
+                while (jraApi.PSGetImage() == JRA_API.PS_NO_FINGER) {
+                    if(fpOpened == false) {
+                        return -1;
                     }
+                    sleep(20);
+                }
+                if(jraApi.PSGenChar(JRA_API.CHAR_BUFFER_A) != JRA_API.PS_OK) {
+                    continue;
+                }
+                if(PS_OK != jraApi.PSSearch(JRA_API.CHAR_BUFFER_A, fingerId)) {
+                    publishProgress("没有找到该指纹");
+                    Log.i(TAG, "没有找到该指纹!!!!");
                     continue;
                 }
 
-                Log.i(TAG, "匹配指纹特征:["+fingerId[0]+"]["+verifyList[fingerId[0]]+"]");
-                callbackContext.success(verifyList[fingerId[0]]);
+                Log.i(TAG, "匹配指纹特征:["+fingerId[0]+"]["+fingerMap.get(fingerId[0])+"]");
+                callbackContext.success(fingerMap.get(fingerId[0]));
                 return 0;
             }
         }
@@ -684,18 +709,31 @@ public class Plugin_U8 implements SoftDecodingAPI.IBarCodeData {
         @Override
         protected void onPreExecute() {
             Log.e(TAG, "Start Search, Please press finger");
-            if(msyUsbKey != null && msyUsbKey.SyClear() != 0) {
-                Log.w(TAG, "指纹库清空异常!");
-                callbackContext.error("指纹库初始化异常");
-                return;
-            }
-            int pageId = 0;
-            for (String s : verifyList) {
-                if(msyUsbKey.SyDownChar(pageId++, DataUtils.hexStringTobyte(s)) != 0) {
-                    Log.w(TAG, "指纹库初始化异常!");
-                }
-            }
+//            if(msyUsbKey != null && msyUsbKey.SyClear() != 0) {
+//                Log.w(TAG, "指纹库清空异常!");
+//                callbackContext.error("指纹库初始化异常");
+//                return;
+//            }
+//            int pageId = 0;
+//            for (String s : verifyList) {
+//                if(msyUsbKey.SyDownChar(pageId++, DataUtils.hexStringTobyte(s)) != 0) {
+//                    Log.w(TAG, "指纹库初始化异常!");
+//                }
+//            }
             return;
+        }
+    }
+
+    /**
+     * 延时
+     *
+     * @param time
+     */
+    private void sleep(long time) {
+        try {
+            Thread.sleep(time);
+        } catch (Exception e) {
+            e.toString();
         }
     }
 }
