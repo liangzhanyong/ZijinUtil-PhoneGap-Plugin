@@ -66,6 +66,22 @@ public class ZijinUtil extends CordovaPlugin {
             callbackContext.sendPluginResult(pr);
             return true;
         }
+        else if(action.equals("barCodeScan")) {
+            scanManager.startRead(new IScanCallBack.Stub() {
+                @Override
+                public void doScanResult(String barCode) throws RemoteException {
+                    if(this.callbackContext != null){
+                        PluginResult pr = new PluginResult(PluginResult.Status.OK);
+                        pr.setKeepCallback(true);
+                        this.callbackContext.sendPluginResult(barCode);
+                    }
+                }
+            });
+            PluginResult pr = new PluginResult(PluginResult.Status.NO_RESULT);
+            pr.setKeepCallback(true);
+            callbackContext.sendPluginResult(pr);
+            return true;
+        }
         else if(action.equals("closeScanReceiver")) {
             cordova.getActivity().unregisterReceiver(receiver);
             return true;
