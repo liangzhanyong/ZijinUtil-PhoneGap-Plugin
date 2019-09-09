@@ -692,8 +692,8 @@ public class Plugin_U8 implements SoftDecodingAPI.IBarCodeData {
                     continue;
                 }
 
-                Log.i(TAG, "匹配指纹特征:["+fingerId[0]+"]["+fingerMap.get(fingerId[0])+"]");
-                callbackContext.success(fingerMap.get(fingerId[0]));
+                Log.i(TAG, "匹配指纹特征序号:["+fingerId[0]+"]");
+                callbackContext.success(fingerId[0]);
                 return 0;
             }
         }
