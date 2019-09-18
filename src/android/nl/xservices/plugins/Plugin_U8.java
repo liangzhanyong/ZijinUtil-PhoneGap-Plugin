@@ -1,8 +1,6 @@
 package nl.xservices.plugins;
 
 import android.annotation.SuppressLint;
-import android.content.Context;
-import android.content.SharedPreferences;
 import android.hardware.usb.UsbDevice;
 import android.hardware.usb.UsbManager;
 import android.os.AsyncTask;
@@ -30,11 +28,13 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.util.HashMap;
+
 import static com.cw.fpjrasdk.syno_usb.OTG_KEY.PS_OK;
 
 public class Plugin_U8 implements SoftDecodingAPI.IBarCodeData {
     private static final String TAG = "Plugin_U8";
-    SharedPreferences sharedPreferences;
+    private static final String FILE_NAME = "fingerData.txt";
 
     private CallbackContext callbackContext;
     public R2000UHFAPI r2000UHFAPI;
@@ -45,12 +45,12 @@ public class Plugin_U8 implements SoftDecodingAPI.IBarCodeData {
     public JRA_API jraApi;
     public boolean fpOpened = false;
     private static int fingerCnt = 1;
+    private HashMap<String, String> fingerMap;
 
     CordovaInterface cordova;
 
     public Plugin_U8(CordovaInterface cordova) {
         this.cordova = cordova;
-        this.sharedPreferences = this.cordova.getActivity().getSharedPreferences("itms", Context.MODE_PRIVATE);
         this.r2000UHFAPI = R2000UHFAPI.getInstance();
         this.softDecodingAPI = new SoftDecodingAPI(cordova.getContext(), this);
         this.softDecodingAPI.openBarCodeReceiver();
@@ -224,7 +224,7 @@ public class Plugin_U8 implements SoftDecodingAPI.IBarCodeData {
                         callbackContext.error("指纹库初始化异常");
                         return;
                     }
-                    SharedPreferences.Editor editor = sharedPreferences.edit();//获取编辑器
+                    String fileData = "";
                     Log.i(TAG, "-------导入---------");
                     for (int i = 0; i < verifyList.length; i++) {
                         if(verifyList[i].length() != 1024) {
@@ -234,10 +234,10 @@ public class Plugin_U8 implements SoftDecodingAPI.IBarCodeData {
                         if(jraApi.PSDownCharToJRA(DataUtils.hexStringTobyte(verifyList[i]), id) != PS_OK) {
                             Log.w(TAG, "存储模板失败!");
                         } else {
-                            editor.putString(String.valueOf(id[0]), verifyList[i]);
+                            fileData += String.valueOf(id[0]) + "$" + verifyList[i] + "&";
                         }
                     }
-                    editor.commit();//提交修改
+                    FileWRTool.writeFile(this.cordova.getContext(), FILE_NAME, fileData);
                     Log.i(TAG, "-------导入---------");
                     callbackContext.success();
                 } catch (JSONException e) {
@@ -694,8 +694,17 @@ public class Plugin_U8 implements SoftDecodingAPI.IBarCodeData {
                     continue;
                 }
 
-                Log.i(TAG, "匹配指纹特征:["+fingerId[0]+"][" + sharedPreferences.getString(String.valueOf(fingerId[0]), "") + "]");
-                callbackContext.success(sharedPreferences.getString(String.valueOf(fingerId[0]), ""));
+                if (fingerMap == null) {
+                    String fingerData = FileWRTool.readFile(cordova.getContext(), FILE_NAME);
+                    String[] fingerList = fingerData.split("&");
+                    fingerMap = new HashMap<>();
+                    for (int i = 0; i < fingerList.length - 1; i++) {
+                        String[] fingerItem = fingerList[i].split("\\$");
+                        fingerMap.put(fingerItem[0], fingerItem[1]);
+                    }
+                }
+                Log.i(TAG, "匹配指纹特征:["+fingerId[0]+"][" + fingerMap.get(String.valueOf(fingerId[0])) + "]");
+                callbackContext.success(fingerMap.get(String.valueOf(fingerId[0])));
                 return 0;
             }
         }
