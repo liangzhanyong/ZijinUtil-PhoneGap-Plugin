@@ -39,7 +39,8 @@ public class ZijinUtil extends CordovaPlugin {
     private boolean isLoop =false;
     private boolean inventoryOpened = false;
 
-    CallbackContext callbackContext;
+    CallbackContext barCodeCallbackContext;
+    CallbackContext rfidCallbackContext;
 
     @SuppressLint("WrongConstant")
     @Override
@@ -60,7 +61,7 @@ public class ZijinUtil extends CordovaPlugin {
     @Override
     public boolean execute(String action, JSONArray args, CallbackContext callbackContext) throws JSONException {
         if(action.equals("openScanReceiver")) {
-            this.callbackContext = callbackContext;
+            this.barCodeCallbackContext = callbackContext;
             PluginResult pr = new PluginResult(PluginResult.Status.NO_RESULT);
             pr.setKeepCallback(true);
             callbackContext.sendPluginResult(pr);
@@ -70,10 +71,10 @@ public class ZijinUtil extends CordovaPlugin {
             scanManager.startRead(new IScanCallBack.Stub() {
                 @Override
                 public void doScanResult(String barCode) throws RemoteException {
-                    if(this.callbackContext != null){
+                    if(callbackContext != null){
                         PluginResult pr = new PluginResult(PluginResult.Status.OK);
                         pr.setKeepCallback(true);
-                        this.callbackContext.sendPluginResult(barCode);
+                        callbackContext.sendPluginResult(barCode);
                     }
                 }
             });
@@ -90,7 +91,7 @@ public class ZijinUtil extends CordovaPlugin {
             isLoop=true;
             inventoryOpened = true;
             LoopReadEPC();
-            this.callbackContext = callbackContext;
+            this.rfidCallbackContext = callbackContext;
             PluginResult pr = new PluginResult(PluginResult.Status.NO_RESULT);
             pr.setKeepCallback(true);
             callbackContext.sendPluginResult(pr);
@@ -165,15 +166,14 @@ public class ZijinUtil extends CordovaPlugin {
     IUhfCallback callback = new IUhfCallback.Stub() {
         @Override
         public void doInventory(List<String> str) {
-            List<String> result = new ArrayList<>();
-            for (int i = 0; i < str.size(); i++) {
-                String strEpc = hexStringToString(str.get(i).substring(6));
-                result.add(strEpc);
-            }
-            Log.d(TAG, "EPC=" + new Gson().toJson(result));
-            PluginResult pr = new PluginResult(PluginResult.Status.OK, new Gson().toJson(result));
+//            List<String> result = new ArrayList<>();
+//            for (int i = 0; i < str.size(); i++) {
+//                String strEpc = hexStringToString(str.get(i).substring(6));
+//                result.add(strEpc);
+//            }
+            PluginResult pr = new PluginResult(PluginResult.Status.OK, new Gson().toJson(str));
             pr.setKeepCallback(true);
-            callbackContext.sendPluginResult(pr);
+            rfidCallbackContext.sendPluginResult(pr);
             DevBeep.PlayOK();
         }
 
@@ -218,7 +218,7 @@ public class ZijinUtil extends CordovaPlugin {
                 if (!"".equals(str)) {
                     PluginResult pr = new PluginResult(PluginResult.Status.OK, str);
                     pr.setKeepCallback(true);
-                    callbackContext.sendPluginResult(pr);
+                    barCodeCallbackContext.sendPluginResult(pr);
                 }
             }
         }
