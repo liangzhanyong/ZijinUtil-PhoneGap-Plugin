@@ -28,6 +28,7 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.util.Date;
 import java.util.HashMap;
 
 import static com.cw.fpjrasdk.syno_usb.OTG_KEY.PS_OK;
@@ -225,7 +226,6 @@ public class Plugin_U8 implements SoftDecodingAPI.IBarCodeData {
                         return;
                     }
                     String fileData = "";
-                    Log.i(TAG, "-------导入---------");
                     for (int i = 0; i < verifyList.length; i++) {
                         if(verifyList[i].length() != 1024) {
                             continue;
@@ -237,8 +237,10 @@ public class Plugin_U8 implements SoftDecodingAPI.IBarCodeData {
                             fileData += String.valueOf(id[0]) + "$" + verifyList[i] + "&";
                         }
                     }
+                    for (int i : jraApi.getUserId()) {
+                        Log.i(TAG, String.valueOf(i));
+                    }
                     FileWRTool.writeFile(this.cordova.getContext(), FILE_NAME, fileData);
-                    Log.i(TAG, "-------导入---------");
                     callbackContext.success();
                 } catch (JSONException e) {
                     e.printStackTrace();
@@ -672,47 +674,68 @@ public class Plugin_U8 implements SoftDecodingAPI.IBarCodeData {
      */
     private class SearchAsyncTask extends AsyncTask<Integer, String, Integer> {
         int exeCount = 0;
+
         @Override
         protected Integer doInBackground(Integer... params) {
             int[] fingerId = new int[1];
-            while (true) {
-                if (fpOpened == false || exeCount > 2) {
-                    return -1;
-                }
-                while (jraApi.PSGetImage() == JRA_API.PS_NO_FINGER) {
-                    if(fpOpened == false) {
+            long startTime = new Date().getTime(), timeout = 60 * 1000;
+            try {
+                while (true) {
+                    if (new Date().getTime() - startTime > timeout) {
+                        callbackContext.error(new Gson().toJson(new ErrorResult(ERROR_CODE.TIMEOUT, "指纹搜索超时!")));
                         return -1;
                     }
-                    sleep(20);
-                }
-                if(jraApi.PSGenChar(JRA_API.CHAR_BUFFER_A) != JRA_API.PS_OK) {
-                    continue;
-                }
-                if(PS_OK != jraApi.PSSearch(JRA_API.CHAR_BUFFER_A, fingerId)) {
-                    publishProgress("没有找到该指纹");
-                    Log.i(TAG, "没有找到该指纹!!!!");
-                    continue;
-                }
-
-                if (fingerMap == null) {
-                    String fingerData = FileWRTool.readFile(cordova.getContext(), FILE_NAME);
-                    String[] fingerList = fingerData.split("&");
-                    fingerMap = new HashMap<>();
-                    for (int i = 0; i < fingerList.length - 1; i++) {
-                        String[] fingerItem = fingerList[i].split("\\$");
-                        fingerMap.put(fingerItem[0], fingerItem[1]);
+                    if (fpOpened == false) {
+                        callbackContext.error(new Gson().toJson(new ErrorResult(ERROR_CODE.UNUSED, "指纹设备未打开!")));
+                        return -1;
                     }
+                    if (exeCount > 2) {
+                        callbackContext.error(new Gson().toJson(new ErrorResult(ERROR_CODE.UNFIND, "未找到该指纹!")));
+                        return -1;
+                    }
+                    while (jraApi.PSGetImage() == JRA_API.PS_NO_FINGER) {
+                        if (new Date().getTime() - startTime > timeout) {
+                            callbackContext.error(new Gson().toJson(new ErrorResult(ERROR_CODE.TIMEOUT, "指纹搜索超时!")));
+                            return -1;
+                        }
+                        if (fpOpened == false) {
+                            callbackContext.error(new Gson().toJson(new ErrorResult(ERROR_CODE.UNUSED, "指纹设备未打开!")));
+                            return -1;
+                        }
+                        sleep(20);
+                    }
+                    if (jraApi.PSGenChar(JRA_API.CHAR_BUFFER_A) != JRA_API.PS_OK) {
+                        continue;
+                    }
+                    if (PS_OK != jraApi.PSSearch(JRA_API.CHAR_BUFFER_A, fingerId)) {
+                        exeCount++;
+                        publishProgress("没有找到该指纹");
+                        continue;
+                    }
+
+                    if (fingerMap == null) {
+                        String fingerData = FileWRTool.readFile(cordova.getContext(), FILE_NAME);
+                        String[] fingerList = fingerData.split("&");
+                        fingerMap = new HashMap<>();
+                        for (int i = 0; i < fingerList.length - 1; i++) {
+                            String[] fingerItem = fingerList[i].split("\\$");
+                            fingerMap.put(fingerItem[0], fingerItem[1]);
+                        }
+                    }
+                    Log.i(TAG, "匹配指纹特征:[" + fingerId[0] + "][" + fingerMap.get(String.valueOf(fingerId[0])) + "]");
+                    callbackContext.success(fingerMap.get(String.valueOf(fingerId[0])));
+                    return 0;
                 }
-                Log.i(TAG, "匹配指纹特征:["+fingerId[0]+"][" + fingerMap.get(String.valueOf(fingerId[0])) + "]");
-                callbackContext.success(fingerMap.get(String.valueOf(fingerId[0])));
-                return 0;
+            } catch (Exception e) {
+                callbackContext.error(new Gson().toJson(new ErrorResult(ERROR_CODE.EXCEPTION, e.getMessage())));
+                return -1;
             }
         }
 
         @Override
         protected void onPostExecute(Integer result) {
             if(result != 0) {
-                callbackContext.error("比对失败");
+//                callbackContext.error("比对失败");
             }
             return;
         }
@@ -747,4 +770,39 @@ public class Plugin_U8 implements SoftDecodingAPI.IBarCodeData {
             e.toString();
         }
     }
+
+    public class ERROR_CODE {
+        public static final int TIMEOUT = 94;
+        public static final int UNFIND = 97;
+        public static final int UNUSED = 98;
+        public static final int EXCEPTION = 99;
+    }
+
+    public class ErrorResult {
+        private int errorCode;
+        private String errorMsg;
+
+        public ErrorResult(int errorCode, String errorMsg) {
+            this.errorCode = errorCode;
+            this.errorMsg = errorMsg;
+        }
+
+        public int getErrorCode() {
+            return errorCode;
+        }
+
+        public void setErrorCode(int errorCode) {
+            this.errorCode = errorCode;
+        }
+
+        public String getErrorMsg() {
+            return errorMsg;
+        }
+
+        public void setErrorMsg(String errorMsg) {
+            this.errorMsg = errorMsg;
+        }
+    }
 }
+
+

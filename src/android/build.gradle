@@ -7,7 +7,7 @@ repositories{
   dependencies {
     api(name: 'serialport_sdk', ext: 'aar')
     api(name: 'barcode_sdk', ext: 'aar')
-    api(name: 'fp_jra_sdk', ext: 'aar')
+    api(name: 'fp_jra_sdk_20190920', ext: 'aar')
     api(name: 'r2000uhf_sdk', ext: 'aar')
    }
  android {

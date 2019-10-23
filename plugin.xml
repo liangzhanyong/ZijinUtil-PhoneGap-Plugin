@@ -51,7 +51,7 @@
 		<config-file parent="/*" target="AndroidManifest.xml"></config-file>
 		<framework src="src/android/build.gradle" custom="true" type="gradleReference" />
 		<resource-file src="src/android/aar/barcode_sdk.aar" target="aar/barcode_sdk.aar"/>
-		<resource-file src="src/android/aar/fp_jra_sdk.aar" target="aar/fp_jra_sdk.aar"/>
+		<resource-file src="src/android/aar/fp_jra_sdk_20190920.aar" target="aar/fp_jra_sdk_20190920.aar"/>
 		<resource-file src="src/android/aar/r2000uhf_sdk.aar" target="aar/r2000uhf_sdk.aar"/>
 		<resource-file src="src/android/aar/serialport_sdk.aar" target="aar/serialport_sdk.aar"/>
 	</platform>
