@@ -577,12 +577,22 @@ public class Plugin_U8 implements SoftDecodingAPI.IBarCodeData {
         @Override
         protected Integer doInBackground(Integer... params) {
             int cnt = 1;
+            long startTime = new Date().getTime(), timeout = 2 * 60 * 1000;
+
             while (true) {
                 if (fpOpened == false) {
                     return -1;
                 }
+                if (new Date().getTime() - startTime > timeout) {
+                    callbackContext.error(new Gson().toJson(new ErrorResult(ERROR_CODE.TIMEOUT, "指纹录入超时!")));
+                    return -1;
+                }
                 while (jraApi.PSGetImage() != JRA_API.PS_NO_FINGER) {
                     if (fpOpened == false) {
+                        return -1;
+                    }
+                    if (new Date().getTime() - startTime > timeout) {
+                        callbackContext.error(new Gson().toJson(new ErrorResult(ERROR_CODE.TIMEOUT, "指纹录入超时!")));
                         return -1;
                     }
                     sleep(200);
@@ -590,6 +600,10 @@ public class Plugin_U8 implements SoftDecodingAPI.IBarCodeData {
                 }
                 while (jraApi.PSGetImage() == JRA_API.PS_NO_FINGER) {
                     if(fpOpened == false) {
+                        return -1;
+                    }
+                    if (new Date().getTime() - startTime > timeout) {
+                        callbackContext.error(new Gson().toJson(new ErrorResult(ERROR_CODE.TIMEOUT, "指纹录入超时!")));
                         return -1;
                     }
                     sleep(200);
@@ -804,5 +818,3 @@ public class Plugin_U8 implements SoftDecodingAPI.IBarCodeData {
         }
     }
 }
-
-
