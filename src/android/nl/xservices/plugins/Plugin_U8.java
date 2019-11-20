@@ -226,6 +226,9 @@ public class Plugin_U8 implements SoftDecodingAPI.IBarCodeData {
                         return;
                     }
                     String fileData = "";
+                    if (fingerMap == null) {
+                        fingerMap = new HashMap<>();
+                    }
                     for (int i = 0; i < verifyList.length; i++) {
                         if(verifyList[i].length() != 1024) {
                             continue;
@@ -235,6 +238,7 @@ public class Plugin_U8 implements SoftDecodingAPI.IBarCodeData {
                             Log.w(TAG, "存储模板失败!");
                         } else {
                             fileData += String.valueOf(id[0]) + "$" + verifyList[i] + "&";
+                            fingerMap.put(String.valueOf(id[0]), verifyList[i]);
                         }
                     }
                     for (int i : jraApi.getUserId()) {
@@ -477,10 +481,11 @@ public class Plugin_U8 implements SoftDecodingAPI.IBarCodeData {
     }
 
     public void openDevice() {
-        if (fpOpened) {
-            callbackContext.success();
-            return;
-        }
+//        if (fpOpened) {
+//            callbackContext.success();
+//            return;
+//        }
+        closeDevice();
         USBFingerManager.getInstance(cordova.getContext()).openUSB(new USBFingerManager.OnUSBFingerListener() {
             @Override
             public void onOpenUSBFingerSuccess(String s, UsbManager usbManager, UsbDevice usbDevice) {
@@ -731,7 +736,7 @@ public class Plugin_U8 implements SoftDecodingAPI.IBarCodeData {
                         String fingerData = FileWRTool.readFile(cordova.getContext(), FILE_NAME);
                         String[] fingerList = fingerData.split("&");
                         fingerMap = new HashMap<>();
-                        for (int i = 0; i < fingerList.length - 1; i++) {
+                        for (int i = 0; i < fingerList.length; i++) {
                             String[] fingerItem = fingerList[i].split("\\$");
                             fingerMap.put(fingerItem[0], fingerItem[1]);
                         }
