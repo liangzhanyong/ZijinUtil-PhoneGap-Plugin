@@ -1,4 +1,4 @@
-package nl.xservices.plugins;
+package com.merpyzf.cordovaplugin.zijin_util;
 
 import android.content.BroadcastReceiver;
 import android.content.Context;
