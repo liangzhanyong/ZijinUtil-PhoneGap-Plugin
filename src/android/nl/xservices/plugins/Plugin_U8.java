@@ -1,15 +1,14 @@
 package nl.xservices.plugins;
 
-import android.annotation.SuppressLint;
+import android.app.Activity;
 import android.hardware.usb.UsbDevice;
 import android.hardware.usb.UsbManager;
 import android.os.AsyncTask;
+import android.os.Environment;
 import android.util.Log;
-import android.widget.Toast;
-
 import com.cw.barcodesdk.SoftDecodingAPI;
-import com.cw.fpjrasdk.JRA_API;
-import com.cw.fpjrasdk.USBFingerManager;
+import com.cw.fpfbbsdk.FingerPrintAPI;
+import com.cw.fpfbbsdk.USBFingerManager;
 import com.cw.r2000uhfsdk.IOnCommonReceiver;
 import com.cw.r2000uhfsdk.IOnInventoryRealReceiver;
 import com.cw.r2000uhfsdk.IOnTagOperation;
@@ -17,9 +16,7 @@ import com.cw.r2000uhfsdk.R2000UHFAPI;
 import com.cw.r2000uhfsdk.base.CMD;
 import com.cw.r2000uhfsdk.helper.InventoryBuffer;
 import com.cw.r2000uhfsdk.helper.OperateTagBuffer;
-import com.cw.serialportsdk.utils.DataUtils;
 import com.google.gson.Gson;
-
 import org.apache.cordova.CallbackContext;
 import org.apache.cordova.CordovaInterface;
 import org.apache.cordova.LOG;
@@ -28,68 +25,71 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import java.util.Date;
-import java.util.HashMap;
+import java.io.File;
 
-import static com.cw.fpjrasdk.syno_usb.OTG_KEY.PS_OK;
+import cn.com.aratek.fp.Bione;
+import cn.com.aratek.fp.FingerprintImage;
+import cn.com.aratek.fp.FingerprintScanner;
+import cn.com.aratek.util.Result;
+
+import java.io.UnsupportedEncodingException;
+
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
 
 public class Plugin_U8 implements SoftDecodingAPI.IBarCodeData {
-    private static final String TAG = "Plugin_U8";
-    private static final String FILE_NAME = "fingerData.txt";
 
-    private CallbackContext callbackContext;
     public R2000UHFAPI r2000UHFAPI;
-
     public SoftDecodingAPI softDecodingAPI;
     public boolean isScanning = false;
+    private CallbackContext callbackContext;
+    private USBFingerManager usbFingerMgr;
+    private FingerPrintAPI fpApi;
+    private FingerprintScanner fpScanner;
+    private FingerprintTask fpTask;
+    private boolean fpScannerOpened = false;
+    private CordovaInterface cordova;
+    private Activity context;
+    private static final String TAG = "Plugin_U8";
 
-    public JRA_API jraApi;
-    public boolean fpOpened = false;
-    private static int fingerCnt = 1;
-    private HashMap<String, String> fingerMap;
-
-    CordovaInterface cordova;
 
     public Plugin_U8(CordovaInterface cordova) {
         this.cordova = cordova;
+        this.context = cordova.getActivity();
         this.r2000UHFAPI = R2000UHFAPI.getInstance();
         this.softDecodingAPI = new SoftDecodingAPI(cordova.getContext(), this);
         this.softDecodingAPI.openBarCodeReceiver();
-        USBFingerManager.getInstance(cordova.getContext()).setDelayMs(500);
     }
 
     public boolean execute(String action, JSONArray args, CallbackContext callbackContext) throws JSONException {
-        if (action.equals("openUHF")) {
+        this.callbackContext = callbackContext;
+        if ("openUHF".equals(action)) {
             cordova.getActivity().runOnUiThread(() -> r2000UHFAPI.open(cordova.getContext()));
             return true;
-        }
-        else if(action.equals("startInventoryReal")) {
+        } else if ("startInventoryReal".equals(action)) {
             cordova.getThreadPool().execute(() -> startInventoryReal(callbackContext));
             PluginResult pr = new PluginResult(PluginResult.Status.NO_RESULT);
             pr.setKeepCallback(true);
             callbackContext.sendPluginResult(pr);
             return true;
-        }
-        else if(action.equals("stopInventoryReal")) {
+        } else if ("stopInventoryReal".equals(action)) {
             cordova.getThreadPool().execute(() -> {
-                if(r2000UHFAPI.getReaderHelper() != null && !!r2000UHFAPI.getReaderHelper().getInventoryFlag()) {
+                if (r2000UHFAPI.getReaderHelper() != null && !!r2000UHFAPI.getReaderHelper().getInventoryFlag()) {
                     r2000UHFAPI.stopInventoryReal();
                 }
             });
             return true;
-        }
-        else if(action.equals("closeUHF")) {
+        } else if ("closeUHF".equals(action)) {
             cordova.getThreadPool().execute(() -> r2000UHFAPI.close());
             return true;
-        }
-        else if(action.equals("scan")) {
+        } else if ("scan".equals(action)) {
             cordova.getThreadPool().execute(() -> {
                 softDecodingAPI.openBarCodeReceiver();
                 barCodeScanner(callbackContext);
             });
             return true;
-        }
-        else if(action.equals("continueScanning")) {
+        } else if ("continueScanning".equals(action)) {
             cordova.getThreadPool().execute(() -> {
                 softDecodingAPI.openBarCodeReceiver();
                 continueScanning(callbackContext);
@@ -98,24 +98,20 @@ public class Plugin_U8 implements SoftDecodingAPI.IBarCodeData {
             pr.setKeepCallback(true);
             callbackContext.sendPluginResult(pr);
             return true;
-        }
-        else if(action.equals("closeScanning")) {
+        } else if ("closeScanning".equals(action)) {
             cordova.getThreadPool().execute(() -> {
                 this.isScanning = false;
                 softDecodingAPI.CloseScanning();
                 softDecodingAPI.closeBarCodeReceiver();
             });
             return true;
-        }
-        else if(action.equals("setScanner")) {
+        } else if ("setScanner".equals(action)) {
             callbackContext.error("方法尚未实现！");
             return true;
-        }
-        else if(action.equals("setScanInterval")) {
+        } else if ("setScanInterval".equals(action)) {
             softDecodingAPI.setTime(args.getJSONObject(0).getInt("time"));
             return true;
-        }
-        else if(action.equals("getReaderTemperature")) {
+        } else if ("getReaderTemperature".equals(action)) {
             cordova.getThreadPool().execute(() -> {
                 r2000UHFAPI.setOnCommonReceiver(new IOnCommonReceiver() {
                     @Override
@@ -135,131 +131,70 @@ public class Plugin_U8 implements SoftDecodingAPI.IBarCodeData {
                 r2000UHFAPI.getReaderTemperature();
             });
             return true;
-        }
-        else if(action.equals("killTag")) {
+        } else if ("killTag".equals(action)) {
             cordova.getThreadPool().execute(() -> {
                 try {
                     killTag(callbackContext, args);
-                } catch(Exception e) {
+                } catch (Exception e) {
                     callbackContext.error(e.getMessage());
                 }
             });
             return true;
-        }
-        else if(action.equals("lockTag")) {
+        } else if ("lockTag".equals(action)) {
             cordova.getThreadPool().execute(() -> {
                 try {
                     lockTag(callbackContext, args);
-                } catch(Exception e) {
+                } catch (Exception e) {
                     callbackContext.error(e.getMessage());
                 }
             });
             return true;
-        }
-        else if(action.equals("readTag")) {
+        } else if ("readTag".equals(action)) {
             cordova.getThreadPool().execute(() -> {
                 try {
                     readTag(callbackContext, args);
-                } catch(Exception e) {
+                } catch (Exception e) {
                     callbackContext.error(e.getMessage());
                 }
             });
             return true;
-        }
-        else if(action.equals("writeTag")) {
+        } else if ("writeTag".equals(action)) {
             cordova.getThreadPool().execute(() -> {
                 try {
                     writeTag(callbackContext, args);
-                } catch(Exception e) {
+                } catch (Exception e) {
                     callbackContext.error(e.getMessage());
                 }
             });
             return true;
-        }
-        else if(action.equals("reset")) {
+        } else if ("reset".equals(action)) {
             r2000UHFAPI.reset();
             return true;
-        }
-        else if(action.equals("setInventoryDelayMillis")) {
+        } else if ("setInventoryDelayMillis".equals(action)) {
             r2000UHFAPI.setInventoryDelayMillis(args.getJSONObject(0).getInt("delayMillis"));
             return true;
-        }
-        else if(action.equals("setOutputPower")) {
+        } else if ("setOutputPower".equals(action)) {
             r2000UHFAPI.setOutputPower(args.getJSONObject(0).getInt("mOutPower"));
             return true;
-        }
-        else if(action.equals("openFingerprint")) {
-            cordova.getThreadPool().execute(() -> {
-                this.callbackContext = callbackContext;
-                openDevice();
-            });
+        } else if ("openFingerprint".equals(action)) {
+            openDevice();
             return true;
-        }
-        else if(action.equals("closeFingerprint")) {
+        } else if ("closeFingerprint".equals(action)) {
             cordova.getThreadPool().execute(() -> {
                 closeDevice();
             });
-        }
-        else if(action.equals("verifyFingerprint")) {
-            cordova.getThreadPool().execute(() -> {
-                this.callbackContext = callbackContext;
-                SearchAsyncTask asyncTask_search = new SearchAsyncTask();
-                asyncTask_search.execute(1);
-            });
+        } else if ("verifyFingerprint".equals(action)) {
+            loadFpData(args, false);
+            identify();
             return true;
-        }
-        else if(action.equals("loadFpData")) {
-            cordova.getThreadPool().execute(() -> {
-                JSONObject params;
-                String[] verifyList;
-
-                try {
-                    params = args.getJSONObject(0);
-                    verifyList = params.getString("chars").split("\\$");
-                    if(fpOpened == false) {
-                        callbackContext.error("指纹仪未打开");
-                        return;
-                    }
-                    if(jraApi != null && jraApi.PSEmpty() != PS_OK) {
-                        Log.w(TAG, "指纹库清空异常!");
-                        callbackContext.error("指纹库初始化异常");
-                        return;
-                    }
-                    String fileData = "";
-                    if (fingerMap == null) {
-                        fingerMap = new HashMap<>();
-                    }
-                    for (int i = 0; i < verifyList.length; i++) {
-                        if(verifyList[i].length() != 1024) {
-                            continue;
-                        }
-                        int[] id = new int[1];
-                        if(jraApi.PSDownCharToJRA(DataUtils.hexStringTobyte(verifyList[i]), id) != PS_OK) {
-                            Log.w(TAG, "存储模板失败!");
-                        } else {
-                            fileData += String.valueOf(id[0]) + "$" + verifyList[i] + "&";
-                            fingerMap.put(String.valueOf(id[0]), verifyList[i]);
-                        }
-                    }
-                    for (int i : jraApi.getUserId()) {
-                        Log.i(TAG, String.valueOf(i));
-                    }
-                    FileWRTool.writeFile(this.cordova.getContext(), FILE_NAME, fileData);
-                    callbackContext.success();
-                } catch (JSONException e) {
-                    e.printStackTrace();
-                    callbackContext.error("指纹库初始化异常");
-                }
-            });
+        } else if ("loadFpData".equals(action)) {
+            loadFpData(args, true);
             return true;
-        }
-        else if(action.equals("scanFingerprint")) {
-            cordova.getThreadPool().execute(() -> {
-                this.callbackContext = callbackContext;
-                ImputAsyncTask asyncTask = new ImputAsyncTask();
-                asyncTask.execute(1);
-            });
+        } else if ("scanFingerprint".equals(action)) {
+            enroll();
             return true;
+        } else if ("clearFingerprintDB".equals(action)) {
+            clearFingerprintDB();
         }
         return true;
     }
@@ -305,7 +240,7 @@ public class Plugin_U8 implements SoftDecodingAPI.IBarCodeData {
 
                 }
             });
-        } catch(Exception e) {
+        } catch (Exception e) {
             callbackId.error("超高频模块启动异常：" + e.getMessage());
         }
     }
@@ -480,60 +415,282 @@ public class Plugin_U8 implements SoftDecodingAPI.IBarCodeData {
         r2000UHFAPI.lockTag(btAryPassWord, btMemBank, btLockType);
     }
 
-    public void openDevice() {
-//        if (fpOpened) {
-//            callbackContext.success();
-//            return;
-//        }
+    //region GBA指纹识别
+
+    /**
+     * 开启指纹识别模块
+     */
+    private void openDevice() {
         closeDevice();
-        USBFingerManager.getInstance(cordova.getContext()).openUSB(new USBFingerManager.OnUSBFingerListener() {
+        usbFingerMgr = USBFingerManager.getInstance(context);
+        usbFingerMgr.openUSB(new USBFingerManager.OnUSBFingerListener() {
             @Override
             public void onOpenUSBFingerSuccess(String s, UsbManager usbManager, UsbDevice usbDevice) {
-                if (s.equals(USBFingerManager.BYD_SMALL_DEVICE)) {
-                    Log.i(TAG, "切换USB成功");
-
-                    jraApi = new JRA_API(usbManager, usbDevice);
-                    int ret = jraApi.openJRA();
-                    if (ret == JRA_API.DEVICE_SUCCESS) {
-                        Log.e(TAG, "open device success!");
-                        fpOpened = true;
-                        callbackContext.success();
-                    } else if (ret == JRA_API.PS_DEVICE_NOT_FOUND) {
-                        callbackContext.error("can't find this device!");
-                    } else if (ret == JRA_API.PS_EXCEPTION) {
-                        callbackContext.error("open device fail");
-                    }
-
-                }
+                openFpScanner();
             }
 
             @Override
             public void onOpenUSBFingerFailure(String s) {
-                callbackContext.error(s);
+                Log.i(TAG, "open usb finger failure.");
+                callbackContext.error("open usb finger failure");
             }
         });
     }
 
     /**
-     * 关闭指纹设备
+     * 启用指纹仪及指纹识别相关的功能
      */
-    public void closeDevice() {
-        try {
-            if (jraApi != null) {
-                jraApi.closeJRA();
-            }
-            Log.e(TAG, "Device Closed");
-            fpOpened = false;
-            USBFingerManager.getInstance(cordova.getContext()).closeUSB();
-        } catch (Exception e) {
-            Log.i(TAG, "Exception: => " + e.toString());
+    private void openFpScanner() {
+        fpScanner = new FingerprintScanner(context);
+        fpApi = FingerPrintAPI.getInstance();
+        // 指纹扫描仪开启成功
+        if ((fpScanner.open() == FingerprintScanner.RESULT_OK) && (fpApi.initialize(context, getFpDbPath()) == Bione.RESULT_OK)) {
+            fpScannerOpened = true;
+            Log.i(TAG, "fingerprint scanner open success.");
+            callbackContext.success("fingerprint scanner open success.");
+        } else {
+            // 指纹扫描仪开启失败
+            String msg = "FpScanner open failed!";
+            fpScannerOpened = false;
+            Log.e(TAG, "fingerprint scanner open failed.");
+            callbackContext.error("fingerprint scanner open failed.");
         }
     }
 
-    public void onDestroy() {
-        r2000UHFAPI.close();
-        closeDevice();
+    /**
+     * 关闭指纹识别模块
+     */
+    private void closeDevice() {
+        if (fpTask != null && fpTask.getStatus() != AsyncTask.Status.FINISHED) {
+            fpTask.cancel(false);
+            fpTask.waitForDone();
+        }
+        if (usbFingerMgr != null && usbFingerMgr.isUSBFingerOpened()) {
+            usbFingerMgr.closeUSB();
+        }
+        if (fpScanner != null && fpScannerOpened) {
+            if (fpScanner.close() == FingerprintScanner.RESULT_OK) {
+                fpScannerOpened = false;
+                Log.i(TAG, "fingerprint device close success.");
+            } else {
+                Log.e(TAG, "fingerprint device close failed.");
+            }
+        }
+        if (fpApi != null && fpApi.exit() != Bione.RESULT_OK) {
+            Log.e(TAG, "algorithm cleanup failed.");
+        }
+        Log.i(TAG, "close device success.");
     }
+
+    /**
+     * 鉴定指纹
+     */
+    private void identify() {
+        fpTask = new FingerprintTask();
+        fpTask.execute("identify");
+    }
+
+    /**
+     * 录入指纹
+     */
+    private void enroll() {
+        fpTask = new FingerprintTask();
+        fpTask.execute("enroll");
+    }
+
+    /**
+     * 加载指纹数据到数据库
+     */
+    private void loadFpData(JSONArray args, boolean isCallSuccess) {
+        if (fpApi == null) {
+            fpApi = FingerPrintAPI.getInstance();
+        }
+        if (fpApi.initialize(this.cordova.getContext(), getFpDbPath()) == Bione.RESULT_OK) {
+            try {
+                clearFingerprintDB();
+                for (int i = 0; i < args.length(); i++) {
+                    String fpTempStr = args.getString(i);
+                    int freeID = fpApi.getFreeID();
+                    byte[] fpTemp = convertToBytes(fpTempStr);
+                    if (fpTemp != null) {
+                        if (fpTemp != null && fpTemp.length > 0 && fpApi.enroll(freeID, fpTemp) == Bione.RESULT_OK) {
+                            Log.i(TAG, "loadFpData: fingerprint scan success.");
+                        } else {
+                            Log.e(TAG, "loadFpData: fingerprint scan failed.");
+                        }
+                    } else {
+                        Log.e(TAG, "fingerprint feature value format error");
+                    }
+
+                }
+            } catch (JSONException e) {
+                e.printStackTrace();
+                this.callbackContext.error(e.getMessage());
+            }
+            if (isCallSuccess) {
+                this.callbackContext.success("load fingerprint data success.");
+            } else {
+                Log.i(TAG, "load fingerprint data success.");
+            }
+        } else {
+            Log.e(TAG, "FingerPrintAPI init failed.");
+            this.callbackContext.error("FingerPrintAPI init failed.");
+        }
+
+    }
+
+    /**
+     * 清空指纹库
+     */
+    private void clearFingerprintDB() {
+        if (fpApi == null) {
+            fpApi = FingerPrintAPI.getInstance();
+        }
+        if (fpApi.initialize(context, getFpDbPath()) == Bione.RESULT_OK) {
+            if (fpApi.clear() != Bione.RESULT_OK) {
+                Log.e(TAG, "clearFingerprintDB: clear fingerprint database failed.");
+            } else {
+                Log.i(TAG, "clearFingerprintDB: clear fingerprint database success.");
+            }
+        } else {
+            callbackContext.error("fingerprint init failed.");
+        }
+    }
+
+    /**
+     * 获取指纹库的数据库文件的路径
+     *
+     * @return
+     */
+    private String getFpDbPath() {
+        return context.getFilesDir().getAbsolutePath() + File.separator + "fp.db";
+    }
+
+
+    /**
+     * 处理指纹相关的任务
+     */
+    public class FingerprintTask extends AsyncTask<String, Integer, Void> {
+        private boolean mIsDone = false;
+        private Result res;
+        private FingerprintImage fpImg;
+        private int mId;
+        private long extractTime;
+        private long generalizeTime;
+        private byte[] fpFeat;
+        private byte[] fpTemp;
+
+        @Override
+        protected void onPreExecute() {
+            super.onPreExecute();
+        }
+
+        @Override
+        protected Void doInBackground(String... params) {
+            do {
+                if ("enroll".equals(params[0]) || "identify".equals(params[0])) {
+                    if(fpScanner == null){
+                        return null;
+                    }
+                    // 准备开始指纹录入
+                    fpScanner.prepare();
+                    int capRetryCount = 0;
+                    do {
+                        res = fpScanner.capture();
+                        fpImg = (FingerprintImage) res.data;
+                        if (fpImg != null) {
+                            // 获取当前提取指纹的图像质量
+                            int quality = fpApi.getFingerprintQuality(fpImg);
+                            if (quality < 50 && capRetryCount < 3 && !isCancelled()) {
+                                capRetryCount++;
+                                continue;
+                            }
+                        }
+                        if (res.error != FingerprintScanner.NO_FINGER || isCancelled()) {
+                            break;
+                        }
+                    } while (true);
+                    // 采集指纹结束
+                    fpScanner.finish();
+                    if (isCancelled()) {
+                        break;
+                    }
+                    if (res.error != FingerprintScanner.RESULT_OK) {
+                        Log.i(TAG,"620->"+getFingerprintErrorString(res.error));
+                        callbackContext.error("fingerprint scan failed.");
+                        break;
+                    }
+
+                    long startTime;
+                    if (params[0].equals("enroll") || params[0].equals("identify")) {
+                        startTime = System.currentTimeMillis();
+                        // 提取特征值
+                        res = fpApi.extractFeature(fpImg);
+                        extractTime = System.currentTimeMillis() - startTime;
+                        if (res.error != Bione.RESULT_OK) {
+                            callbackContext.error("extract feature failed.");
+                            break;
+                        }
+                        fpFeat = (byte[]) res.data;
+                    }
+                    // 录入指纹
+                    if ("enroll".equals(params[0])) {
+                        res = fpApi.makeTemplate(fpFeat, fpFeat, fpFeat);
+                        if (res.error != Bione.RESULT_OK) {
+                            callbackContext.error("scan fingerprint failed.");
+                            break;
+                        }
+                        fpTemp = (byte[]) res.data;
+                        int id = fpApi.getFreeID();
+                        if (id < 0) {
+                            Log.e(TAG, "647-> "+getFingerprintErrorString(id));
+                            callbackContext.error("scan fingerprint failed. info: " + getFingerprintErrorString(id));
+                            break;
+                        }
+                        int ret = fpApi.enrol
+                        l(id, fpTemp);
+                        if (ret != Bione.RESULT_OK) {
+                            callbackContext.error("scan fingerprint failed.");
+                            break;
+                        } else {
+                            String fpTempStr = convertToStr(fpTemp);
+                            callbackContext.success(fpTempStr);
+                        }
+                        mId = id;
+                    }
+
+                    if ("identify".equals(params[0])) {
+                        int id = fpApi.identify(fpFeat);
+                        if (id < 0) {
+                            callbackContext.error("identify fingerprint failed.");
+                            break;
+                        }
+                        Result feature = fpApi.getFeature(id);
+                        byte[] identifiedFp = (byte[]) feature.data;
+                        callbackContext.success(convertToStr(identifiedFp));
+                    }
+                }
+            } while (false);
+            return null;
+        }
+
+        @Override
+        protected void onProgressUpdate(Integer... values) {
+            super.onProgressUpdate(values);
+        }
+
+        private void waitForDone() {
+            while (!mIsDone) {
+                try {
+                    Thread.sleep(50);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+    }
+
+    //endregion
 
     @Override
     public void sendScan() {
@@ -544,7 +701,7 @@ public class Plugin_U8 implements SoftDecodingAPI.IBarCodeData {
     public void onBarCodeData(String s) {
         LOG.i("onBarCodeData", s);
         PluginResult.Status status;
-        if(s == null || s.isEmpty() || s.equals("null") || s.contains("No decoded message available.")) {
+        if (s == null || s.isEmpty() || s.equals("null") || s.contains("No decoded message available.")) {
 //                    status = PluginResult.Status.ERROR;
             return;
         } else {
@@ -573,208 +730,117 @@ public class Plugin_U8 implements SoftDecodingAPI.IBarCodeData {
 
     }
 
+
+    //region 生命周期事件处理
+    public void onRestart() {
+        openDevice();
+    }
+
+    public void onStop() {
+        closeDevice();
+    }
+
+    public void onDestroy() {
+        r2000UHFAPI.close();
+        closeDevice();
+    }
+    //endregion
+
+    //region 工具方法
+
     /**
-     * 采集指纹
+     * 根据错误码获取具体的错误信息
+     *
+     * @param error
+     * @return
      */
-    @SuppressLint("StaticFieldLeak")
-    private class ImputAsyncTask extends AsyncTask<Integer, String, Integer> {
-        Toast toast;
-        @Override
-        protected Integer doInBackground(Integer... params) {
-            int cnt = 1;
-            long startTime = new Date().getTime(), timeout = 2 * 60 * 1000;
-
-            while (true) {
-                if (fpOpened == false) {
-                    return -1;
-                }
-                if (new Date().getTime() - startTime > timeout) {
-                    callbackContext.error(new Gson().toJson(new ErrorResult(ERROR_CODE.TIMEOUT, "指纹录入超时!")));
-                    return -1;
-                }
-                while (jraApi.PSGetImage() != JRA_API.PS_NO_FINGER) {
-                    if (fpOpened == false) {
-                        return -1;
-                    }
-                    if (new Date().getTime() - startTime > timeout) {
-                        callbackContext.error(new Gson().toJson(new ErrorResult(ERROR_CODE.TIMEOUT, "指纹录入超时!")));
-                        return -1;
-                    }
-                    sleep(200);
-                    publishProgress("请离开手指!");
-                }
-                while (jraApi.PSGetImage() == JRA_API.PS_NO_FINGER) {
-                    if(fpOpened == false) {
-                        return -1;
-                    }
-                    if (new Date().getTime() - startTime > timeout) {
-                        callbackContext.error(new Gson().toJson(new ErrorResult(ERROR_CODE.TIMEOUT, "指纹录入超时!")));
-                        return -1;
-                    }
-                    sleep(200);
-                    if (cnt == 1) {
-                        publishProgress("请按压手指!");
-                    } else {
-                        publishProgress("请再次按压手指!");
-                    }
-                }
-                Log.i(TAG, "-----开始采集-----");
-                if(cnt == 1) {
-                    if(jraApi.PSGenChar(JRA_API.CHAR_BUFFER_A) != JRA_API.PS_OK) {
-                        cnt--;
-                    }
-                }
-                if(cnt == 2) {
-                    if(jraApi.PSGenChar(JRA_API.CHAR_BUFFER_B) != JRA_API.PS_OK) {
-                        continue;
-                    }
-                    if(jraApi.PSRegModule() != JRA_API.PS_OK) {
-                        publishProgress("生成模板失败，请重新录入");
-                        return -1;
-                    }
-                    int[] fingerId = new int[1];
-                    byte[] g_TempData = new byte[512];
-
-                    if(jraApi.PSStoreChar(fingerId, g_TempData) != JRA_API.PS_OK) {
-                        publishProgress("存储特征失败，请重新录入");
-                        return -1;
-                    }
-                    Log.e(TAG, "特征值: " + DataUtils.bytesToHexString(g_TempData));
-                    callbackContext.success(DataUtils.bytesToHexString(g_TempData));
-                    publishProgress("OK");
-                    return 0;
-                }
-                cnt++;
-            }
-        }
-
-        @Override
-        protected void onProgressUpdate(String... values) {
-            super.onProgressUpdate(values);
-
-            if ("OK".equals(values[0])) {
-                toast.cancel();
-                return;
-            }
-            if(toast != null) {
-                toast.cancel();
-            }
-            toast = Toast.makeText(cordova.getContext(), values[0], Toast.LENGTH_LONG);
-            toast.show();
-            Log.i(TAG, values[0]);
-        }
-
-        @Override
-        protected void onPostExecute(Integer result) {
-            if (0 == result) {
-                if (fingerCnt > 256) {
-                    Log.i(TAG, "fingerCnt > 256");
-                    return;
-                }
-                fingerCnt++;
-                Log.i(TAG, "Enroll Success fingerCnt = " + fingerCnt);
-                return;
-            } else {
-                Log.i(TAG, "Enroll Error " + result);
-                callbackContext.error("Sy Enroll:" + result);
-                return;
-            }
-        }
-
-        @Override
-        protected void onPreExecute() {
-            Log.i(TAG, "Please press finger...");
-            return;
+    private String getFingerprintErrorString(int error) {
+        int strid;
+        switch (error) {
+            case FingerprintScanner.RESULT_OK:
+                return "operation_successful";
+            case FingerprintScanner.RESULT_FAIL:
+                return "error_operation_failed";
+            case FingerprintScanner.WRONG_CONNECTION:
+                return "error_wrong_connection";
+            case FingerprintScanner.DEVICE_BUSY:
+                return "error_device_busy";
+            case FingerprintScanner.DEVICE_NOT_OPEN:
+                return "error_device_not_open";
+            case FingerprintScanner.TIMEOUT:
+                return "error_timeout";
+            case FingerprintScanner.NO_PERMISSION:
+                return "error_no_permission";
+            case FingerprintScanner.WRONG_PARAMETER:
+                return "error_wrong_parameter";
+            case FingerprintScanner.DECODE_ERROR:
+                return "error_decode";
+            case FingerprintScanner.INIT_FAIL:
+                return "error_initialization_failed";
+            case FingerprintScanner.UNKNOWN_ERROR:
+                return "error_unknown";
+            case FingerprintScanner.NOT_SUPPORT:
+                return "error_not_support";
+            case FingerprintScanner.NOT_ENOUGH_MEMORY:
+                return "error_not_enough_memory";
+            case FingerprintScanner.DEVICE_NOT_FOUND:
+                return "error_device_not_found";
+            case FingerprintScanner.DEVICE_REOPEN:
+                return "error_device_reopen";
+            case FingerprintScanner.NO_FINGER:
+                return "error_no_finger";
+            case Bione.INITIALIZE_ERROR:
+                return "error_algorithm_initialization_failed";
+            case Bione.INVALID_FEATURE_DATA:
+                return "error_invalid_feature_data";
+            case Bione.BAD_IMAGE:
+                return "error_bad_image";
+            case Bione.NOT_MATCH:
+                return "error_not_match";
+            case Bione.LOW_POINT:
+                return "error_low_point";
+            case Bione.NO_RESULT:
+                return "error_no_result";
+            case Bione.OUT_OF_BOUND:
+                return "error_out_of_bound";
+            case Bione.DATABASE_FULL:
+                return "error_database_full";
+            case Bione.LIBRARY_MISSING:
+                return "error_library_missing";
+            case Bione.UNINITIALIZE:
+                return "error_algorithm_uninitialize";
+            case Bione.REINITIALIZE:
+                return "error_algorithm_reinitialize";
+            case Bione.REPEATED_ENROLL:
+                return "error_repeated_enroll";
+            case Bione.NOT_ENROLLED:
+                return "error_not_enrolled";
+            default:
+                return "error_other";
         }
     }
 
-    /**
-     * 搜索指纹
-     */
-    private class SearchAsyncTask extends AsyncTask<Integer, String, Integer> {
-        int exeCount = 0;
+    public String convertToStr(byte[] fpTempBytes) {
+        StringBuffer sb = new StringBuffer();
+        for (byte aByte : fpTempBytes) {
+            sb.append(aByte);
+            sb.append(" ");
+        }
+        return sb.toString();
+    }
 
-        @Override
-        protected Integer doInBackground(Integer... params) {
-            int[] fingerId = new int[1];
-            long startTime = new Date().getTime(), timeout = 60 * 1000;
-            try {
-                while (true) {
-                    if (new Date().getTime() - startTime > timeout) {
-                        callbackContext.error(new Gson().toJson(new ErrorResult(ERROR_CODE.TIMEOUT, "指纹搜索超时!")));
-                        return -1;
-                    }
-                    if (fpOpened == false) {
-                        callbackContext.error(new Gson().toJson(new ErrorResult(ERROR_CODE.UNUSED, "指纹设备未打开!")));
-                        return -1;
-                    }
-                    if (exeCount > 2) {
-                        callbackContext.error(new Gson().toJson(new ErrorResult(ERROR_CODE.UNFIND, "未找到该指纹!")));
-                        return -1;
-                    }
-                    while (jraApi.PSGetImage() == JRA_API.PS_NO_FINGER) {
-                        if (new Date().getTime() - startTime > timeout) {
-                            callbackContext.error(new Gson().toJson(new ErrorResult(ERROR_CODE.TIMEOUT, "指纹搜索超时!")));
-                            return -1;
-                        }
-                        if (fpOpened == false) {
-                            callbackContext.error(new Gson().toJson(new ErrorResult(ERROR_CODE.UNUSED, "指纹设备未打开!")));
-                            return -1;
-                        }
-                        sleep(20);
-                    }
-                    if (jraApi.PSGenChar(JRA_API.CHAR_BUFFER_A) != JRA_API.PS_OK) {
-                        continue;
-                    }
-                    if (PS_OK != jraApi.PSSearch(JRA_API.CHAR_BUFFER_A, fingerId)) {
-                        exeCount++;
-                        publishProgress("没有找到该指纹");
-                        continue;
-                    }
-
-                    if (fingerMap == null) {
-                        String fingerData = FileWRTool.readFile(cordova.getContext(), FILE_NAME);
-                        String[] fingerList = fingerData.split("&");
-                        fingerMap = new HashMap<>();
-                        for (int i = 0; i < fingerList.length; i++) {
-                            String[] fingerItem = fingerList[i].split("\\$");
-                            fingerMap.put(fingerItem[0], fingerItem[1]);
-                        }
-                    }
-                    Log.i(TAG, "匹配指纹特征:[" + fingerId[0] + "][" + fingerMap.get(String.valueOf(fingerId[0])) + "]");
-                    callbackContext.success(fingerMap.get(String.valueOf(fingerId[0])));
-                    return 0;
-                }
-            } catch (Exception e) {
-                callbackContext.error(new Gson().toJson(new ErrorResult(ERROR_CODE.EXCEPTION, e.getMessage())));
-                return -1;
+    public byte[] convertToBytes(String strBytes) {
+        String[] strByteArray = strBytes.split(" ");
+        int length = strByteArray.length;
+        byte[] bytes = new byte[length];
+        try {
+            for (int i = 0; i < strByteArray.length; i++) {
+                bytes[i] = Byte.parseByte(strByteArray[i]);
             }
+        } catch (NumberFormatException e) {
+            return null;
         }
-
-        @Override
-        protected void onPostExecute(Integer result) {
-            if(result != 0) {
-//                callbackContext.error("比对失败");
-            }
-            return;
-        }
-
-        @Override
-        protected void onPreExecute() {
-            Log.e(TAG, "Start Search, Please press finger");
-//            if(msyUsbKey != null && msyUsbKey.SyClear() != 0) {
-//                Log.w(TAG, "指纹库清空异常!");
-//                callbackContext.error("指纹库初始化异常");
-//                return;
-//            }
-//            int pageId = 0;
-//            for (String s : verifyList) {
-//                if(msyUsbKey.SyDownChar(pageId++, DataUtils.hexStringTobyte(s)) != 0) {
-//                    Log.w(TAG, "指纹库初始化异常!");
-//                }
-//            }
-            return;
-        }
+        return bytes;
     }
 
     /**
@@ -789,37 +855,5 @@ public class Plugin_U8 implements SoftDecodingAPI.IBarCodeData {
             e.toString();
         }
     }
-
-    public class ERROR_CODE {
-        public static final int TIMEOUT = 94;
-        public static final int UNFIND = 97;
-        public static final int UNUSED = 98;
-        public static final int EXCEPTION = 99;
-    }
-
-    public class ErrorResult {
-        private int errorCode;
-        private String errorMsg;
-
-        public ErrorResult(int errorCode, String errorMsg) {
-            this.errorCode = errorCode;
-            this.errorMsg = errorMsg;
-        }
-
-        public int getErrorCode() {
-            return errorCode;
-        }
-
-        public void setErrorCode(int errorCode) {
-            this.errorCode = errorCode;
-        }
-
-        public String getErrorMsg() {
-            return errorMsg;
-        }
-
-        public void setErrorMsg(String errorMsg) {
-            this.errorMsg = errorMsg;
-        }
-    }
+    //endregion
 }
