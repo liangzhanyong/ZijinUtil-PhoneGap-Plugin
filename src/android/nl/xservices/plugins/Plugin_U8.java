@@ -177,10 +177,14 @@ public class Plugin_U8 implements SoftDecodingAPI.IBarCodeData {
             r2000UHFAPI.setOutputPower(args.getJSONObject(0).getInt("mOutPower"));
             return true;
         } else if ("openFingerprint".equals(action)) {
-            openDevice();
+            cordova.getThreadPool().execute(() -> {
+                openDevice();
+            });
             return true;
         } else if ("closeFingerprint".equals(action)) {
+            Log.i(TAG, "exec closeFingerprint....");
             cordova.getThreadPool().execute(() -> {
+                Log.i(TAG, "thread execute close device...");
                 closeDevice();
             });
         } else if ("verifyFingerprint".equals(action)) {
@@ -468,7 +472,7 @@ public class Plugin_U8 implements SoftDecodingAPI.IBarCodeData {
         if (usbFingerMgr != null && usbFingerMgr.isUSBFingerOpened()) {
             usbFingerMgr.closeUSB();
         }
-        if (fpScanner != null && fpScannerOpened) {
+        if (fpScanner != null) {
             if (fpScanner.close() == FingerprintScanner.RESULT_OK) {
                 fpScannerOpened = false;
                 Log.i(TAG, "fingerprint device close success.");
@@ -647,8 +651,7 @@ public class Plugin_U8 implements SoftDecodingAPI.IBarCodeData {
                             callbackContext.error("scan fingerprint failed. info: " + getFingerprintErrorString(id));
                             break;
                         }
-                        int ret = fpApi.enrol
-                        l(id, fpTemp);
+                        int ret = fpApi.enroll(id, fpTemp);
                         if (ret != Bione.RESULT_OK) {
                             callbackContext.error("scan fingerprint failed.");
                             break;
@@ -733,11 +736,9 @@ public class Plugin_U8 implements SoftDecodingAPI.IBarCodeData {
 
     //region 生命周期事件处理
     public void onRestart() {
-        openDevice();
     }
 
     public void onStop() {
-        closeDevice();
     }
 
     public void onDestroy() {

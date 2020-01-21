@@ -9,6 +9,7 @@ import android.os.Build;
 import org.apache.cordova.CordovaInterface;
 import org.apache.cordova.CordovaPlugin;
 import org.apache.cordova.CallbackContext;
+import android.util.Log;
 
 import org.apache.cordova.CordovaWebView;
 import org.json.JSONArray;
@@ -33,7 +34,7 @@ public class ZijinUtil extends CordovaPlugin {
     @Override
     public void initialize(CordovaInterface cordova, CordovaWebView webView) {
         super.initialize(cordova, webView);
-
+        Log.i("wk", "初始化ZijinUtil插件");
         if (DEVTYPE_P80.equals(Build.MODEL)) {
             barcodeUtility = BarcodeUtility.getInstance();
             try {
@@ -67,6 +68,7 @@ public class ZijinUtil extends CordovaPlugin {
         filter.addAction(Intent.ACTION_REBOOT);
         cordova.getActivity().registerReceiver(receiver, filter);
     }
+
 
     @Override
     public boolean execute(String action, JSONArray args, CallbackContext callbackContext) throws JSONException {
@@ -132,6 +134,7 @@ public class ZijinUtil extends CordovaPlugin {
 
     @Override
     public void onDestroy() {
+        Log.i("wk", "onDestroy()...");
         super.onDestroy();
         if(DEVTYPE_P80.equals(Build.MODEL)){
             if (barcodeUtility != null) {
