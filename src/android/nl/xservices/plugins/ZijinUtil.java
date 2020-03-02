@@ -9,13 +9,13 @@ import android.os.Build;
 import org.apache.cordova.CordovaInterface;
 import org.apache.cordova.CordovaPlugin;
 import org.apache.cordova.CallbackContext;
+import android.util.Log;
 
 import org.apache.cordova.CordovaWebView;
 import org.json.JSONArray;
 import org.json.JSONException;
 
 import com.barcode.BarcodeUtility;
-import com.cw.fpjrasdk.USBFingerManager;
 import com.rscja.deviceapi.RFIDWithUHF;
 import com.rscja.deviceapi.exception.ConfigurationException;
 
@@ -34,7 +34,7 @@ public class ZijinUtil extends CordovaPlugin {
     @Override
     public void initialize(CordovaInterface cordova, CordovaWebView webView) {
         super.initialize(cordova, webView);
-
+        Log.i("wk", "初始化ZijinUtil插件");
         if (DEVTYPE_P80.equals(Build.MODEL)) {
             barcodeUtility = BarcodeUtility.getInstance();
             try {
@@ -42,16 +42,19 @@ public class ZijinUtil extends CordovaPlugin {
             } catch (ConfigurationException e) {
                 e.printStackTrace();
             }
-            cordova.getThreadPool().execute(() -> {
-                barcodeUtility.open(cordova.getContext(), BarcodeUtility.ModuleType.AUTOMATIC_ADAPTATION);
-                barcodeUtility.enableContinuousScan(cordova.getContext(),true);
-                barcodeUtility.setOutputMode(cordova.getContext(), 2);
-                barcodeUtility.enablePlaySuccessSound(cordova.getContext(), true);
-                barcodeUtility.enableVibrate(cordova.getContext(), true);
-                barcodeUtility.setScanFailureBroadcast(cordova.getContext(), false);
-                barcodeUtility.setContinuousScanIntervalTime(cordova.getContext(), 100);
-                barcodeUtility.setContinuousScanTimeOut(cordova.getContext(), 3 * 60);
-                plugin_p80 = new Plugin_P80(cordova, barcodeUtility, rfidWithUHF);
+            cordova.getThreadPool().execute(new Runnable() {
+                @Override
+                public void run() {
+                    barcodeUtility.open(cordova.getContext(), BarcodeUtility.ModuleType.AUTOMATIC_ADAPTATION);
+                    barcodeUtility.enableContinuousScan(cordova.getContext(), true);
+                    barcodeUtility.setOutputMode(cordova.getContext(), 2);
+                    barcodeUtility.enablePlaySuccessSound(cordova.getContext(), true);
+                    barcodeUtility.enableVibrate(cordova.getContext(), true);
+                    barcodeUtility.setScanFailureBroadcast(cordova.getContext(), false);
+                    barcodeUtility.setContinuousScanIntervalTime(cordova.getContext(), 100);
+                    barcodeUtility.setContinuousScanTimeOut(cordova.getContext(), 3 * 60);
+                    plugin_p80 = new Plugin_P80(cordova, barcodeUtility, rfidWithUHF);
+                }
             });
         } else if (DEVTYPE_U8.equals(Build.MODEL)) {
             plugin_u8 = new Plugin_U8(cordova);
@@ -66,6 +69,7 @@ public class ZijinUtil extends CordovaPlugin {
         cordova.getActivity().registerReceiver(receiver, filter);
     }
 
+
     @Override
     public boolean execute(String action, JSONArray args, CallbackContext callbackContext) throws JSONException {
         if (DEVTYPE_P80.equals(Build.MODEL) && plugin_p80 != null) {
@@ -78,9 +82,16 @@ public class ZijinUtil extends CordovaPlugin {
     }
 
     @Override
+    public void onReset() {
+        super.onReset();
+        if (DEVTYPE_U8.equals(Build.MODEL)) {
+            plugin_u8.onRestart();
+        }
+    }
+
+    @Override
     public void onResume(boolean multitasking) {
         super.onResume(multitasking);
-
         if (DEVTYPE_P80.equals(Build.MODEL)) {
             barcodeUtility.stopScan(cordova.getContext(), BarcodeUtility.ModuleType.AUTOMATIC_ADAPTATION);
         } else if (DEVTYPE_U8.equals(Build.MODEL)) {
@@ -114,16 +125,16 @@ public class ZijinUtil extends CordovaPlugin {
         super.onStop();
         if(DEVTYPE_U8.equals(Build.MODEL)) {
             try {
-                if (plugin_u8.jraApi != null) {
-                    plugin_u8.jraApi.closeJRA();
-                }
-                USBFingerManager.getInstance(cordova.getContext()).closeUSB();
-            } catch (Exception e) {}
+                plugin_u8.onStop();
+            } catch (Exception e) {
+
+            }
         }
     }
 
     @Override
     public void onDestroy() {
+        Log.i("wk", "onDestroy()...");
         super.onDestroy();
         if(DEVTYPE_P80.equals(Build.MODEL)){
             if (barcodeUtility != null) {

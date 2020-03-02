@@ -48,11 +48,19 @@
 		<config-file parent="/*" target="res/xml/config.xml">
 			<feature name="ZijinUtil"><param name="android-package" value="nl.xservices.plugins.ZijinUtil" /></feature>
 		</config-file>
-		<config-file parent="/*" target="AndroidManifest.xml"></config-file>
+		<config-file parent="/*" target="AndroidManifest.xml">
+			<uses-feature android:name="android.hardware.usb.host" android:required="true" />
+			<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+			<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+		</config-file>
+		<edit-config file="AndroidManifest.xml" target="/manifest/uses-sdk" mode="merge">
+			<uses-sdk android:minSdkVersion="19" android:targetSdkVersion="22" />
+		</edit-config>
 		<framework src="src/android/build.gradle" custom="true" type="gradleReference" />
 		<resource-file src="src/android/aar/barcode_sdk.aar" target="aar/barcode_sdk.aar"/>
 		<resource-file src="src/android/aar/fp_jra_sdk_20190920.aar" target="aar/fp_jra_sdk_20190920.aar"/>
 		<resource-file src="src/android/aar/r2000uhf_sdk.aar" target="aar/r2000uhf_sdk.aar"/>
 		<resource-file src="src/android/aar/serialport_sdk.aar" target="aar/serialport_sdk.aar"/>
+		<resource-file src="src/android/aar/fp_gab_sdk_20190701.aar" target="aar/fp_gab_sdk_20190701.aar"/>
 	</platform>
 </plugin>
