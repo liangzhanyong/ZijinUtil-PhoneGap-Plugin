@@ -1,2 +1,2 @@
 # ZijinUtil-PhoneGap-Plugin
-> 该版本支持西安富立叶F760型号设备；
+> 该版本支持西安富立叶CM550型号设备；

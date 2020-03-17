@@ -5,19 +5,39 @@
 	xmlns:android="http://schemas.android.com/apk/res/android">
 	<name>ZijinUtil</name>
 	<js-module src="www/ZijinUtil.js" name="ZijinUtil">
-		<clobbers target="window.plugins.zijinutil" />
+		<clobbers target="cordova.plugins.ZijinUtil" />
 	</js-module>
 	<platform name="android">
-		<source-file src="src/android/nl/xservices/plugins/ZijinUtil.java" target-dir="src/nl/xservices/plugins" />
-		<source-file src="src/android/nl/xservices/plugins/DevBeep.java" target-dir="src/nl/xservices/plugins" />
-		<source-file src="src/android/libs/OLCSDK.jar" target-dir="libs" />
+		<config-file parent="/*" target="res/xml/config.xml">
+			<feature name="ZijinUtil">
+				<param name="android-package" value="nl.xservices.plugins.ZijinUtil" />
+			</feature>
+		</config-file>
+		
+		<!-- 添加程序运行所需权限  -->
+		<config-file parent="/*" target="AndroidManifest.xml">
+		    <uses-permission android:name="android.permission.INTERNET" />
+    		<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+    		<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+		</config-file>
+
+		<source-file src="src/android/nl/xservices/plugins/ZijinUtil.java" target-dir="src/nl/xservices/plugins" />		
+		<source-file src="src/android/nl/xservices/plugins/base/ICordovaPlugin.java" target-dir="src/nl/xservices/plugins/base" />
+		<source-file src="src/android/nl/xservices/plugins/bean/PrintBean.java" target-dir="src/nl/xservices/plugins/bean" />
+		<source-file src="src/android/nl/xservices/plugins/helper/printer/printBroadcastReceiver.java" target-dir="src/nl/xservices/plugins/helper/printer" />
+		<source-file src="src/android/nl/xservices/plugins/helper/printer/printer.java" target-dir="src/hardware/print" />
+		<source-file src="src/android/nl/xservices/plugins/helper/printer/PrintHelper.java" target-dir="src/nl/xservices/plugins/helper/printer" />
+		<source-file src="src/android/nl/xservices/plugins/plugin/PrintPlugin.java" target-dir="src/nl/xservices/plugins/plugin" />
+		<source-file src="src/android/nl/xservices/plugins/plugin/ScanPlugin.java" target-dir="src/nl/xservices/plugins/plugin" />
+		<source-file src="src/android/nl/xservices/plugins/plugin/UHFPlugin.java" target-dir="src/nl/xservices/plugins/plugin" />
+		<source-file src="src/android/nl/xservices/plugins/util/BarcodeUtil.java" target-dir="src/nl/xservices/plugins/util" />
+		<source-file src="src/android/nl/xservices/plugins/util/DevBeep.java" target-dir="src/nl/xservices/plugins/util" />
+		<framework src="com.google.code.gson:gson:2.8.5" />		
+		<source-file src="src/android/libs/armeabi/libhardware-print.so" target-dir="src/main/jniLibs/armeabi"/>
+		<source-file src="src/android/libs/core-2.3.0.jar" target-dir="libs" />
+		<source-file src="src/android/libs/olcuhf.jar" target-dir="libs" />
 		<source-file src="src/android/libs/scan.jar" target-dir="libs" />
-		<source-file src="src/android/libs/gson-2.8.5.jar" target-dir="libs" />
 		<resource-file src="src/android/raw/beep_err.wav" target="res/raw/beep_err.wav" />
 		<resource-file src="src/android/raw/beep_ok.wav" target="res/raw/beep_ok.wav" />
-		<config-file parent="/*" target="res/xml/config.xml">
-			<feature name="ZijinUtil"><param name="android-package" value="nl.xservices.plugins.ZijinUtil" /></feature>
-		</config-file>
-		<config-file parent="/*" target="AndroidManifest.xml"></config-file>
 	</platform>
 </plugin>
